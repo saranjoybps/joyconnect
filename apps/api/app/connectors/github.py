@@ -7,7 +7,8 @@ import re
 import httpx
 
 from app.connectors.base import (
-    ConnectorManifest, TokenSet, ToolContext, ToolDef, ToolError, object_schema, raise_for_status,
+    ConnectorManifest, CredentialField, ResolvedApp, TokenSet, ToolContext, ToolDef, ToolError,
+    oauth_client_fields, object_schema, raise_for_status,
 )
 
 API = "https://api.github.com"
@@ -31,12 +32,14 @@ async def account_label(http: httpx.AsyncClient, token: TokenSet, settings) -> s
     return resp.json().get("login")
 
 
-async def revoke(http: httpx.AsyncClient, m: ConnectorManifest, token: TokenSet, settings) -> None:
+async def revoke(http: httpx.AsyncClient, m: ConnectorManifest, token: TokenSet, settings,
+                 app: ResolvedApp) -> None:
+    client_id, client_secret = m.client_credentials(app)
     await http.request(
         "DELETE",
-        f"{API}/applications/{settings.github_app_client_id}/token",
+        f"{API}/applications/{client_id}/token",
         json={"access_token": token.access_token},
-        auth=httpx.BasicAuth(settings.github_app_client_id, settings.github_app_client_secret),
+        auth=httpx.BasicAuth(client_id, client_secret),
         headers={"Accept": "application/vnd.github+json"},
     )
 
@@ -97,10 +100,25 @@ MANIFEST = ConnectorManifest(
     scopes=[],
     token_auth_style="body",
     pkce=True,
-    client_id_setting="github_app_client_id",
-    client_secret_setting="github_app_client_secret",
+    credential_fields=oauth_client_fields(
+        id_help="GitHub > Settings > Developer settings > GitHub Apps > your app > Client ID (not the App ID).",
+        secret_help="Same page > Generate a new client secret.",
+        id_pattern=r"Iv[0-9A-Za-z._]+", id_hint="GitHub App client IDs start with Iv",
+        extra=[CredentialField(key="app_slug", label="App slug", required=False, pattern=r"[a-z0-9-]+",
+                               pattern_hint="Lowercase letters, digits and dashes",
+                               help_text="From the app's public URL github.com/apps/SLUG; used for the install link.")],
+    ),
+    console_url="https://github.com/settings/apps",
+    setup_guide=[
+        "Create a GitHub App (Settings > Developer settings > GitHub Apps > New GitHub App), not an OAuth App.",
+        "Callback URL: the redirect URI below. Tick 'Expire user authorization tokens'. Webhook: off.",
+        "Repository permissions: Issues read & write; Pull requests, Contents and Metadata read-only.",
+        "Copy the client ID, generate a client secret, and paste both here with the app slug.",
+        "After connecting, install the app on the repositories you want to use.",
+    ],
+    invalid_client_errors=frozenset({"incorrect_client_credentials", "invalid_client"}),
     reauth_errors=frozenset({"invalid_grant", "bad_refresh_token", "bad_verification_code"}),
-    setup_url="https://github.com/apps/{github_app_slug}/installations/new",
+    setup_url="https://github.com/apps/{app_slug}/installations/new",
     account_label=account_label,
     revoke=revoke,
     tools=[

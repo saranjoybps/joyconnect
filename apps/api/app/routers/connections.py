@@ -1,4 +1,4 @@
-"""Connection management: catalog, list, toggle, check, disconnect, key-based connect."""
+"""Connection management: catalog (with setup status), list, toggle, check, disconnect."""
 
 from __future__ import annotations
 
@@ -6,13 +6,14 @@ import string
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.connectors.base import OAuthError, ToolError
 from app.connectors.registry import all_manifests, get_manifest
 from app.core.config import Settings, get_settings
 from app.core.security import UserDep
 from app.deps import DbDep, HttpDep, StoreDep
+from app.oauth.apps import ProviderAppService
 from app.oauth.tokens import NeedsReauth, TokenService, public_view
 
 router = APIRouter(prefix="/api", tags=["connections"])
@@ -23,35 +24,52 @@ def _svc(db, store, http, settings) -> TokenService:
     return TokenService(db, store, http, settings)
 
 
-def _setup_url(template: str | None, settings: Settings) -> str | None:
-    """Fill {setting_name} placeholders; hide the link if any value is missing."""
+def _setup_url(template: str | None, values: dict[str, str]) -> str | None:
+    """Fill {field} placeholders from non-secret app fields; hide the link if any is missing."""
     if not template:
         return None
-    values = settings.model_dump()
-    try:
-        url = template.format(**values)
-    except KeyError:
-        return None
     fields = [f for _, f, _, _ in string.Formatter().parse(template) if f]
-    return url if all(values.get(f) for f in fields) else None
+    if not all(values.get(f) for f in fields):
+        return None
+    return template.format(**{f: values[f] for f in fields})
 
 
 @router.get("/connectors")
-async def list_connectors(_: UserDep, settings: SettingsDep) -> list[dict[str, Any]]:
+async def list_connectors(user: UserDep, db: DbDep, store: StoreDep, settings: SettingsDep) -> list[dict[str, Any]]:
     """Catalog for the /connections grid. Purely data-driven from manifests."""
-    return [
-        {
+    svc = ProviderAppService(db, store, settings)
+    rows = {r["provider"]: r for r in await db.select("provider_apps", {"user_id": user.id})}
+    manifests = list(all_manifests().values())
+    out = []
+    for m in manifests:
+        row = rows.get(m.credentials_key)
+        setup = svc.public_view(row, m)
+        if row:
+            public_values = dict(row.get("extra") or {})
+        elif setup["source"] == "platform":
+            app = m.platform_app(settings)
+            public_values = {f.key: app.values.get(f.key, "") for f in m.credential_fields if not f.secret} if app else {}
+        else:
+            public_values = {}
+        group = [x.id for x in manifests if x.credentials_key == m.credentials_key and x.auth_type == "oauth2"]
+        out.append({
             "id": m.id,
             "name": m.name,
             "icon": m.icon,
             "description": m.description,
             "auth_type": m.auth_type,
-            "configured": m.is_configured(settings),
-            "setup_url": _setup_url(m.setup_url, settings),
+            "app_provider": m.credentials_key,
+            "configured": setup["source"] != "none",
+            "setup": setup,
+            "credential_fields": [f.model_dump(exclude={"pattern"}) for f in m.credential_fields],
+            "redirect_uris": [settings.redirect_uri(cid) for cid in group],
+            "scopes": m.scopes,
+            "console_url": m.console_url,
+            "setup_guide": m.setup_guide,
+            "setup_url": _setup_url(m.setup_url, public_values),
             "tools": [{"name": t.name, "risk": t.risk} for t in m.tools],
-        }
-        for m in all_manifests().values()
-    ]
+        })
+    return out
 
 
 @router.get("/connections")
@@ -103,32 +121,3 @@ async def check(connection_id: str, user: UserDep, db: DbDep, store: StoreDep, h
     except (OAuthError, ToolError) as exc:
         raise HTTPException(502, f"provider error: {exc}") from exc
     return {"status": "active"}
-
-
-class CredentialsBody(BaseModel):
-    provider: str
-    credentials: dict[str, str] = Field(default_factory=dict)
-
-
-async def _connect_with_credentials(kind: str, body: CredentialsBody, user, db, store, http, settings) -> dict:
-    m = get_manifest(body.provider)
-    if m is None or m.auth_type != kind or m.validate_credentials is None:
-        raise HTTPException(404, "unknown provider")
-    try:
-        token, label = await m.validate_credentials(http, body.credentials, settings)
-    except (ValueError, ToolError) as exc:
-        raise HTTPException(400, str(exc)) from exc
-    row = await _svc(db, store, http, settings).save_connection(user.id, m, token, label)
-    return public_view(row)
-
-
-@router.post("/connections/api-key")
-async def connect_api_key(body: CredentialsBody, user: UserDep, db: DbDep, store: StoreDep, http: HttpDep,
-                          settings: SettingsDep) -> dict:
-    return await _connect_with_credentials("api_key", body, user, db, store, http, settings)
-
-
-@router.post("/connections/connection-string")
-async def connect_connection_string(body: CredentialsBody, user: UserDep, db: DbDep, store: StoreDep,
-                                    http: HttpDep, settings: SettingsDep) -> dict:
-    return await _connect_with_credentials("connection_string", body, user, db, store, http, settings)

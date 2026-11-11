@@ -54,8 +54,9 @@ def test_start_unknown_provider(client):
 
 
 def test_start_unconfigured_provider(client, settings):
-    settings.slack_client_secret = ""
-    assert client.post("/api/connections/slack/start", headers=auth()).status_code == 400
+    settings.platform_defaults.pop("PLATFORM_SLACK_CLIENT_SECRET")
+    resp = client.post("/api/connections/slack/start", headers=auth())
+    assert resp.status_code == 409 and resp.json()["detail"]["code"] == "setup_required"
 
 
 def test_google_authorize_url(client, db):
@@ -288,12 +289,6 @@ async def test_expired_without_refresh_token_needs_reauth(client, db, store):
     conn = await db.insert("connections", {"user_id": USER_A, "provider": "slack", "account_label": "x",
                                            "scopes": [], "secret_id": sid})
     assert client.post(f"/api/connections/{conn['id']}/check", headers=auth()).json() == {"status": "needs_reauth"}
-
-
-def test_credentials_endpoints_reject_unknown(client):
-    body = {"provider": "slack", "credentials": {}}
-    assert client.post("/api/connections/api-key", json=body, headers=auth()).status_code == 404
-    assert client.post("/api/connections/connection-string", json=body, headers=auth()).status_code == 404
 
 
 @respx.mock

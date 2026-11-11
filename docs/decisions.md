@@ -75,3 +75,24 @@ Each entry: what CLAUDE.md says, what the live docs say (checked 2026-11-11), wh
 - **Tool selection.** Only tools of the user's *active* connections are offered. Above
   `MAX_TOOLS_PER_REQUEST`, whole connectors are kept in order: mentioned in the message, then most
   recently used.
+
+## User-entered provider credentials (provider_apps)
+
+- **Credential groups.** `ConnectorManifest.app_provider` lets connectors share one app: Sheets, Docs and
+  Calendar all use the user's single `google` app (one consent screen, three redirect URIs).
+- **Storage.** Non-secret fields: `provider_apps.client_id` and `extra`. Secret fields: one SecretStore
+  payload `{"secrets": {...}}` referenced by `secret_id`. Clients have column grants only on
+  `id, user_id, provider, created_at`; the API returns a masked client ID and never a secret.
+- **Same app end to end.** The signed OAuth state carries the provider_app id (`a`), the callback loads
+  exactly that app, and `connections.provider_app_id` makes refresh and revoke use it too. `null` means the
+  platform default. If the app is deleted, the callback fails with `setup_required` and existing
+  connections become `needs_reauth`.
+- **Credential test.** No provider offers a "validate client" endpoint, so we redeem a dummy
+  authorization code. Wrong credentials → `invalid_client` (Google, Notion), `invalid_client_id` /
+  `bad_client_secret` (Slack), `incorrect_client_credentials` (GitHub); right credentials → an invalid-code
+  error. Each manifest lists its `invalid_client_errors`. Nothing is created at the provider.
+- **Removed endpoints.** `POST /api/connections/api-key` and `/connection-string` are gone; non-OAuth
+  connectors save credentials through `/api/provider-apps/{provider}` and connect through the same
+  `/api/connections/{provider}/start`, which validates them.
+- **Env.** `GOOGLE_CLIENT_ID`/`SLACK_CLIENT_ID`/... and `GITHUB_APP_SLUG` were removed. Optional
+  `PLATFORM_<APP>_<FIELD>` defaults replace them (GitHub's slug became a form field).

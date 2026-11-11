@@ -55,10 +55,16 @@ export function ConnectionsView() {
     setBusy(true);
     setError(null);
     try {
-      const { authorize_url } = await connectionsApi.start(c.id);
-      window.location.assign(authorize_url);
+      const result = await connectionsApi.start(c.id);
+      if (result.authorize_url) {
+        window.location.assign(result.authorize_url);
+        return;
+      }
+      setReloadKey((k) => k + 1);
+      setBusy(false);
     } catch (e) {
       setError((e as Error).message);
+      setReloadKey((k) => k + 1);
       setBusy(false);
     }
   }
@@ -68,7 +74,7 @@ export function ConnectionsView() {
       <div>
         <h1 id="connections-title" className="text-xl font-semibold">Connections</h1>
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          Connect the apps the assistant may use. Tokens stay on our server and are never sent to your browser.
+          Set up each app with your own developer credentials, then connect. Secrets and tokens stay on the server and are never sent back to your browser.
         </p>
       </div>
 
@@ -95,6 +101,7 @@ export function ConnectionsView() {
             onConnect={connect}
             onDisconnect={(conn) => run(() => connectionsApi.disconnect(conn.id))}
             onToggleAutoApprove={(conn, v) => run(() => connectionsApi.setAutoApprove(conn.id, v))}
+            onSetupChanged={() => setReloadKey((k) => k + 1)}
           />
         ))}
       </div>

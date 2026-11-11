@@ -3,8 +3,15 @@
 import { env } from "@/lib/env";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
+export type ApiErrorDetail = {
+  code?: string;
+  message?: string;
+  errors?: Record<string, string>;
+  [key: string]: unknown;
+};
+
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public detail: ApiErrorDetail = {}) {
     super(message);
   }
 }
@@ -28,14 +35,19 @@ export async function apiFetch<T>(
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const resp = await fetch(`${env.apiBaseUrl}${path}`, { ...init, headers });
   if (!resp.ok) {
-    let detail = resp.statusText;
+    let message = resp.statusText;
+    let detail: ApiErrorDetail = {};
     try {
       const body = await resp.json();
-      detail = typeof body.detail === "string" ? body.detail : detail;
+      if (typeof body.detail === "string") message = body.detail;
+      else if (body.detail && typeof body.detail === "object") {
+        detail = body.detail as ApiErrorDetail;
+        message = detail.message ?? (detail.errors ? "Please fix the highlighted fields." : message);
+      }
     } catch {
       /* non-JSON error */
     }
-    throw new ApiError(resp.status, detail);
+    throw new ApiError(resp.status, message, detail);
   }
   return (resp.status === 204 ? undefined : await resp.json()) as T;
 }

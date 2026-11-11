@@ -6,8 +6,8 @@ from typing import Any
 import httpx
 
 from app.connectors.base import (
-    ConnectorManifest, TokenSet, ToolContext, ToolDef, ToolError, default_parse_token_response,
-    object_schema, raise_for_status,
+    ConnectorManifest, ResolvedApp, TokenSet, ToolContext, ToolDef, ToolError, default_parse_token_response,
+    oauth_client_fields, object_schema, raise_for_status,
 )
 
 API = "https://api.notion.com/v1"
@@ -30,11 +30,13 @@ async def account_label(http: httpx.AsyncClient, token: TokenSet, settings) -> s
     return token.extra.get("workspace_name") or token.extra.get("workspace_id")
 
 
-async def revoke(http: httpx.AsyncClient, m: ConnectorManifest, token: TokenSet, settings) -> None:
+async def revoke(http: httpx.AsyncClient, m: ConnectorManifest, token: TokenSet, settings,
+                 app: ResolvedApp) -> None:
+    client_id, client_secret = m.client_credentials(app)
     await http.post(
         f"{API}/oauth/revoke",
         json={"token": token.access_token},
-        auth=httpx.BasicAuth(settings.notion_client_id, settings.notion_client_secret),
+        auth=httpx.BasicAuth(client_id, client_secret),
         headers={"Notion-Version": settings.notion_version},
     )
 
@@ -153,8 +155,18 @@ MANIFEST = ConnectorManifest(
     token_auth_style="basic",
     token_body_format="json",
     pkce=False,
-    client_id_setting="notion_client_id",
-    client_secret_setting="notion_client_secret",
+    credential_fields=oauth_client_fields(
+        id_help="notion.so/profile/integrations > your public integration > Configuration (OAuth Client ID).",
+        secret_help="Same page: OAuth Client Secret.",
+        id_pattern=r"[0-9a-fA-F-]{32,36}", id_hint="Notion client IDs are UUIDs",
+    ),
+    console_url="https://www.notion.so/profile/integrations",
+    setup_guide=[
+        "Create a new integration at notion.so/profile/integrations and make it Public.",
+        "Add the redirect URI below.",
+        "Capabilities: Read content, Insert content, Update content.",
+        "Copy the OAuth client ID and secret here. Users pick which pages to share when they connect.",
+    ],
     parse_token_response=parse_token_response,
     account_label=account_label,
     revoke=revoke,

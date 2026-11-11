@@ -1,6 +1,7 @@
 """Signed, single-use OAuth state and PKCE helpers.
 
-The state carries (user id, provider, nonce, issued-at) and an HMAC.
+The state carries (user id, provider, provider_app ref, nonce, issued-at) and an HMAC.
+The app ref ties the callback (and every later refresh) to the app that started the flow.
 Single use and the 10 minute limit are enforced against the oauth_states
 row, which also holds the PKCE verifier (the verifier never leaves the server).
 """
@@ -35,8 +36,10 @@ def _key(secret: str) -> bytes:
     return secret.encode()
 
 
-def sign_state(secret: str, user_id: str, provider: str, now: float | None = None) -> str:
-    payload = {"u": user_id, "p": provider, "n": secrets.token_urlsafe(16), "t": int(now or time.time())}
+def sign_state(secret: str, user_id: str, provider: str, app_ref: str = "platform",
+               now: float | None = None) -> str:
+    payload = {"u": user_id, "p": provider, "a": app_ref, "n": secrets.token_urlsafe(16),
+               "t": int(now or time.time())}
     body = _b64(json.dumps(payload, separators=(",", ":")).encode())
     sig = _b64(hmac.new(_key(secret), body.encode(), hashlib.sha256).digest())
     return f"{body}.{sig}"

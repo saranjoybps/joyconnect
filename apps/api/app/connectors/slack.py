@@ -5,8 +5,8 @@ from typing import Any
 import httpx
 
 from app.connectors.base import (
-    ConnectorManifest, OAuthError, TokenSet, ToolContext, ToolDef, ToolError,
-    default_parse_token_response, object_schema,
+    ConnectorManifest, OAuthError, ResolvedApp, TokenSet, ToolContext, ToolDef, ToolError,
+    default_parse_token_response, oauth_client_fields, object_schema,
 )
 
 API = "https://slack.com/api"
@@ -32,7 +32,8 @@ async def account_label(http: httpx.AsyncClient, token: TokenSet, settings) -> s
     return data.get("team")
 
 
-async def revoke(http: httpx.AsyncClient, m: ConnectorManifest, token: TokenSet, settings) -> None:
+async def revoke(http: httpx.AsyncClient, m: ConnectorManifest, token: TokenSet, settings,
+                 app: ResolvedApp) -> None:
     await http.post(f"{API}/auth.revoke", headers={"Authorization": f"Bearer {token.access_token}"})
 
 
@@ -72,8 +73,20 @@ MANIFEST = ConnectorManifest(
     scope_separator=",",
     token_auth_style="basic",
     pkce=False,
-    client_id_setting="slack_client_id",
-    client_secret_setting="slack_client_secret",
+    credential_fields=oauth_client_fields(
+        id_help="api.slack.com/apps > your app > Basic Information > App Credentials.",
+        secret_help="Same page, next to the client ID.",
+        id_pattern=r"[0-9]+\.[0-9]+", id_hint="Slack client IDs look like 1234567890.1234567890",
+    ),
+    console_url="https://api.slack.com/apps",
+    setup_guide=[
+        "Create an app at api.slack.com/apps (From scratch) in your workspace.",
+        "OAuth & Permissions > Redirect URLs: add the redirect URI below. Slack requires HTTPS, "
+        "so use a tunnel such as ngrok for local development.",
+        "OAuth & Permissions > Bot Token Scopes: add the scopes listed below.",
+        "Basic Information > App Credentials: copy the client ID and client secret here.",
+    ],
+    invalid_client_errors=frozenset({"invalid_client_id", "bad_client_secret", "invalid_client"}),
     reauth_errors=frozenset({"invalid_grant", "invalid_refresh_token", "token_revoked", "token_expired"}),
     parse_token_response=parse_token_response,
     account_label=account_label,

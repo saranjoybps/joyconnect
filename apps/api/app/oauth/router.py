@@ -1,4 +1,9 @@
-"""Generic OAuth2 broker serving every `oauth2` connector."""
+"""Generic connect flow for every connector.
+
+oauth2: start -> provider consent -> callback (code exchange server-side).
+api_key / connection_string: start validates the saved credentials and connects directly.
+The provider_app used is resolved once at start and carried in the signed state.
+"""
 
 from __future__ import annotations
 
@@ -11,39 +16,52 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 
-from app.connectors.base import OAuthError, ToolError
+from app.connectors.base import OAuthError, SetupRequired, ToolError
 from app.connectors.registry import get_manifest
 from app.core.config import Settings, get_settings
 from app.core.security import UserDep
 from app.deps import DbDep, HttpDep, StoreDep
+from app.oauth.apps import ProviderAppService
 from app.oauth.providers import build_authorize_url, exchange_code
 from app.oauth.state import STATE_TTL_SECONDS, StateError, pkce_pair, sign_state, verify_state
-from app.oauth.tokens import TokenService
+from app.oauth.tokens import TokenService, public_view
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["oauth"])
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
-def _oauth_manifest(provider: str, settings: Settings):
-    m = get_manifest(provider)
-    if m is None or m.auth_type != "oauth2":
-        raise HTTPException(404, "unknown provider")
-    if not m.is_configured(settings):
-        raise HTTPException(400, f"{m.name} is not configured on the server")
-    return m
+def setup_required(exc: SetupRequired) -> HTTPException:
+    return HTTPException(409, {"code": "setup_required", "message": str(exc)})
 
 
 @router.post("/connections/{provider}/start")
-async def start(provider: str, user: UserDep, db: DbDep, settings: SettingsDep) -> dict:
-    m = _oauth_manifest(provider, settings)
+async def start(provider: str, user: UserDep, db: DbDep, store: StoreDep, http: HttpDep,
+                settings: SettingsDep) -> dict:
+    m = get_manifest(provider)
+    if m is None:
+        raise HTTPException(404, "unknown provider")
+    try:
+        app = await ProviderAppService(db, store, settings).resolve(user.id, m)
+    except SetupRequired as exc:
+        raise setup_required(exc) from exc
+
+    if m.auth_type != "oauth2":
+        if m.validate_credentials is None:
+            raise HTTPException(500, "connector cannot validate credentials")
+        try:
+            token, label = await m.validate_credentials(http, app.values, settings)
+        except (ValueError, ToolError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        row = await TokenService(db, store, http, settings).save_connection(user.id, m, token, label, app)
+        return {"connected": True, "connection": public_view(row)}
+
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=STATE_TTL_SECONDS)
     await db.delete_older_than("oauth_states", "created_at", cutoff)
-
-    state = sign_state(settings.oauth_state_secret, user.id, m.id)
+    state = sign_state(settings.oauth_state_secret, user.id, m.id, app.state_ref)
     verifier, challenge = pkce_pair() if m.pkce else (None, None)
     await db.insert("oauth_states", {"state": state, "user_id": user.id, "provider": m.id, "code_verifier": verifier})
-    return {"authorize_url": build_authorize_url(m, settings, state, challenge)}
+    return {"authorize_url": build_authorize_url(m, settings, app, state, challenge)}
 
 
 def _back_to_web(settings: Settings, **params: str) -> RedirectResponse:
@@ -85,7 +103,11 @@ async def callback(
 
     user_id = payload["u"]
     try:
-        token = await exchange_code(http, m, settings, code, rows[0].get("code_verifier"))
+        app = await ProviderAppService(db, store, settings).by_ref(user_id, m, payload.get("a"))
+    except SetupRequired:
+        return _back_to_web(settings, error="setup_required", provider=provider)
+    try:
+        token = await exchange_code(http, m, settings, app, code, rows[0].get("code_verifier"))
         label = await m.account_label(http, token, settings) if m.account_label else None
     except OAuthError as exc:
         log.info("code exchange failed for %s: %s", provider, exc.code)
@@ -94,5 +116,5 @@ async def callback(
         log.warning("provider call failed during %s callback: %s", provider, type(exc).__name__)
         return _back_to_web(settings, error="provider_unavailable", provider=provider)
 
-    await TokenService(db, store, http, settings).save_connection(user_id, m, token, label)
+    await TokenService(db, store, http, settings).save_connection(user_id, m, token, label, app)
     return _back_to_web(settings, connected=provider)

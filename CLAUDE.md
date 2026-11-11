@@ -59,13 +59,13 @@ Hard rules:
 │     ├─ app/main.py
 │     ├─ app/core/ (config.py, security.py, secrets.py, logging.py)
 │     ├─ app/db/ (client.py, models.py)
-│     ├─ app/oauth/ (router.py, state.py, providers.py)
+│     ├─ app/oauth/ (router.py, state.py, providers.py, apps.py, tokens.py)
 │     ├─ app/connectors/ (base.py, registry.py, google_sheets.py, google_docs.py,
 │     │                    google_calendar.py, gmail.py, slack.py, notion.py,
 │     │                    github.py, postgres.py, meta_ads.py, google_ads.py)
 │     ├─ app/agent/ (runtime.py, policy.py, prompts.py, tools.py)
 │     ├─ app/mcp/ (server.py)
-│     ├─ app/routers/ (chat.py, connections.py, approvals.py, health.py)
+│     ├─ app/routers/ (chat.py, connections.py, provider_apps.py, approvals.py, health.py)
 │     └─ tests/
 └─ supabase/migrations/           # SQL, numbered
 ```
@@ -95,25 +95,29 @@ OPENAI_MODEL=gpt-4o-mini
 MAX_TOOL_STEPS=8
 MAX_TOOLS_PER_REQUEST=24
 
-# Providers (client id/secret per provider)
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-SLACK_CLIENT_ID=
-SLACK_CLIENT_SECRET=
-NOTION_CLIENT_ID=
-NOTION_CLIENT_SECRET=
-GITHUB_APP_CLIENT_ID=
-GITHUB_APP_CLIENT_SECRET=
-META_APP_ID=
-META_APP_SECRET=
+# API versions (not credentials)
+NOTION_VERSION=2026-03-11
 META_GRAPH_VERSION=               # VERIFY latest in Meta docs
 GOOGLE_ADS_API_VERSION=           # VERIFY latest in Google Ads docs
+
+# OPTIONAL platform-default provider apps: PLATFORM_<APP>_<FIELD>
+# Used only when a user has not entered their own app on the Connections page.
+# PLATFORM_GOOGLE_CLIENT_ID=      PLATFORM_GOOGLE_CLIENT_SECRET=
+# PLATFORM_SLACK_CLIENT_ID=       PLATFORM_SLACK_CLIENT_SECRET=
+# PLATFORM_NOTION_CLIENT_ID=      PLATFORM_NOTION_CLIENT_SECRET=
+# PLATFORM_GITHUB_CLIENT_ID=      PLATFORM_GITHUB_CLIENT_SECRET=      PLATFORM_GITHUB_APP_SLUG=
+# PLATFORM_META_APP_ID=           PLATFORM_META_APP_SECRET=
 
 # Safety
 ALLOW_PRIVATE_DB_HOSTS=false      # Postgres connector SSRF guard
 ```
 
-Redirect URI to register with every OAuth provider: `{API_BASE_URL}/api/oauth/callback/{provider_id}`.
+Only server keys (Supabase, OpenAI, encryption, state secret) are required. **Provider app credentials
+(client id/secret, app id/secret, API keys, connection strings) are entered by each user in the UI** and
+stored encrypted in `provider_apps`; `PLATFORM_*` env defaults are an optional fallback.
+
+Redirect URI to register with every OAuth provider: `{API_BASE_URL}/api/oauth/callback/{provider_id}`
+(the Set up form shows it ready to copy).
 
 ## 6. Database (Supabase migrations)
 
@@ -172,6 +176,19 @@ create table public.tool_runs (
   created_at timestamptz not null default now()
 );
 
+create table public.provider_apps (             -- user-entered provider app credentials
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  provider text not null,                       -- credential group, e.g. 'google' (Sheets/Docs/Calendar)
+  client_id text,                               -- primary non-secret id; shown to the browser masked only
+  secret_id text,                               -- SecretStore pointer to the encrypted secret fields
+  extra jsonb not null default '{}',            -- other non-secret fields (e.g. GitHub app slug)
+  created_at timestamptz not null default now(),
+  unique (user_id, provider)
+);
+-- connections.provider_app_id uuid references provider_apps(id): the app that made the
+-- connection (null = platform default). Refresh and revoke always use that same app.
+
 create table public.approvals (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null,
@@ -182,7 +199,7 @@ create table public.approvals (
 );
 ```
 
-RLS policies: `select using (user_id = auth.uid())` on all tables; `connections` exposed to the client through a **view that omits `secret_id`**.
+RLS policies: `select using (user_id = auth.uid())` on all tables; `connections` exposed to the client through a **view that omits `secret_id`**. `provider_apps`: RLS on, clients may select only `id, user_id, provider, created_at` (never `client_id`, `secret_id`, `extra`); all writes via FastAPI.
 
 ## 7. Secrets and tokens
 
@@ -217,16 +234,35 @@ class ConnectorManifest(BaseModel):
     pkce: bool = True
     revoke_url: str | None = None
     tools: list[ToolDef]
+    credential_fields: list[CredentialField]   # the Set up form, e.g. client_id + client_secret
+    app_provider: str | None = None            # shared credential group (Google connectors: 'google')
+    console_url: str | None = None             # provider developer console link
+    setup_guide: list[str] = []                # short steps shown on the Set up form
     # Optional hooks for providers that deviate from plain OAuth2:
-    # build_authorize_url(), parse_token_response(), account_label(), validate_credentials()
+    # parse_token_response(), account_label(), revoke(), validate_credentials()
+
+class CredentialField(BaseModel):
+    key: str                       # 'client_id', 'client_secret', 'app_id', 'api_key', 'connection_string'
+    label: str
+    secret: bool                   # encrypted via SecretStore, never returned to the browser
+    help_text: str
 ```
+
+Examples: Google, Slack, Notion and GitHub take `client_id` + `client_secret` (GitHub adds an optional
+`app_slug`); Meta takes `app_id` + `app_secret`; API-key connectors take the key; Postgres takes the
+connection string. Every connector, including `api_key` and `connection_string`, uses the same
+form-driven flow: **Set up → Save → Test → Connect**.
+
+Credential resolution for every flow: the user's `provider_app` → `PLATFORM_<APP>_<FIELD>` env
+defaults → a clear `setup_required` error.
 
 `registry.py` auto-discovers manifests. One **generic OAuth router** serves all `oauth2` connectors:
 
-- `POST /api/connections/{provider}/start` → returns `{authorize_url}`. Builds a signed `state` (user id, nonce, provider, PKCE verifier), stores it in `oauth_states`.
-- `GET /api/oauth/callback/{provider}` → verifies state, exchanges code **server-side**, stores tokens via `SecretStore`, upserts `connections`, redirects to `{WEB_BASE_URL}/connections?connected={provider}`.
+- `POST|GET|DELETE /api/provider-apps/{provider}` → save, view (masked client id, never secrets), remove. Removing refuses with `409 has_connections` (listing them) unless `?confirm=true`, then disconnects those connections and deletes the credentials.
+- `POST /api/provider-apps/{provider}/test` → format check plus a harmless provider call (OAuth: redeem a dummy code; `invalid_client` = bad credentials, `invalid_grant` = good).
+- `POST /api/connections/{provider}/start` → resolves the provider app. OAuth: returns `{authorize_url}` and builds a signed `state` (user id, provider, provider_app id, nonce) stored in `oauth_states` with the PKCE verifier. Non-OAuth: validates the saved credentials and connects (`{connected: true}`).
+- `GET /api/oauth/callback/{provider}` → verifies state, loads **the provider_app named in the state**, exchanges code **server-side**, stores tokens via `SecretStore`, upserts `connections` (with `provider_app_id`), redirects to `{WEB_BASE_URL}/connections?connected={provider}`. Token refresh and revoke use the same app.
 - `POST /api/connections/{id}/disconnect`
-- `POST /api/connections/api-key` and `/connection-string` → validate with a test call, then store.
 - `GET /api/connections` → list for the current user (no secrets).
 
 ## 9. Agent runtime
@@ -261,10 +297,13 @@ Flow when approval is needed: create `tool_runs(status=pending)` + `approvals(st
 
 ## 11. Connector specs
 
-Use the **minimum scopes**. Add scopes only when a tool needs them.
+Use the **minimum scopes**. Add scopes only when a tool needs them. Each user creates the provider app
+below in their own developer account and enters its credentials on the connector's Set up form; no
+provider credentials live in env (except optional `PLATFORM_*` defaults).
 
 ### Google (Sheets, Docs, Calendar; Gmail later)
 - Authorize: `https://accounts.google.com/o/oauth2/v2/auth` · Token: `https://oauth2.googleapis.com/token` · Revoke: `https://oauth2.googleapis.com/revoke`
+- Credentials: one Google OAuth client (`client_id`, `client_secret`) shared by Sheets, Docs and Calendar (`app_provider='google'`); register all three redirect URIs.
 - Extra params: `access_type=offline`, `prompt=consent`, `include_granted_scopes=true`. A refresh token is only returned on first authorization, so keep `prompt=consent`.
 - Scopes: `https://www.googleapis.com/auth/spreadsheets`, `.../documents`, `.../calendar.events`, Gmail later: `.../gmail.send` only.
 - **VERIFY** each scope's sensitivity in Google's scope table. Sheets `spreadsheets` is sensitive; full `drive` and `gmail.readonly` are restricted (annual security assessment). Do **not** request restricted scopes.
@@ -283,34 +322,38 @@ Use the **minimum scopes**. Add scopes only when a tool needs them.
 
 ### Slack
 - Authorize: `https://slack.com/oauth/v2/authorize` (bot scopes in `scope`, comma-separated) · Token: `https://slack.com/api/oauth.v2.access` (POST form).
+- Credentials: Slack app `client_id`, `client_secret` (HTTP Basic on the token endpoint).
 - Bot scopes: `chat:write`, `channels:read`, `users:read`. Store the `xoxb-` bot token from the top level of the response. Bot tokens do not expire unless token rotation is enabled.
 - Tools: `slack__list_channels` read, `slack__post_message(channel, text)` write.
 
 ### Notion
 - Authorize: `https://api.notion.com/v1/oauth/authorize` (`client_id`, `redirect_uri`, `response_type=code`, `owner=user`, `state`) · Token: `https://api.notion.com/v1/oauth/token` with **HTTP Basic** auth (`client_id:client_secret`) → `token_auth_style='basic'`.
+- Credentials: public integration `client_id`, `client_secret`.
 - Users choose which pages to share in Notion's page picker. Each user authorizes individually. Support refresh (`grant_type=refresh_token`). Header `Notion-Version` must be sent; **VERIFY** the current value.
 - Tools: `notion__search(query)` read, `notion__get_page(page_id)` read, `notion__query_database(database_id, filter?)` read, `notion__create_page(parent_id, title, content?)` write.
 
 ### GitHub (use a GitHub App, not an OAuth App)
 - GitHub Apps give fine-grained permissions and per-repo installation. User access tokens expire after 8 hours with a 6-month refresh token. **VERIFY** endpoints and the install flow in the GitHub Apps docs.
+- Credentials: GitHub App `client_id` (not the App ID), `client_secret`, optional `app_slug` (install link).
 - Permissions: Issues (read/write), Pull requests (read), Contents (read), Metadata (read).
 - Tools: `github__list_repos`, `github__list_issues(repo, state?)` read; `github__create_issue(repo, title, body)`, `github__comment_on_issue(repo, number, body)` write.
 
 ### Postgres (user's own database)
-- `auth_type='connection_string'`. UI copy tells the user to create a **read-only role**.
+- `auth_type='connection_string'`; credential field `connection_string` (secret). UI copy tells the user to create a **read-only role**.
 - On save: parse the URL, require SSL, connect, run `select 1`, list tables.
 - SSRF guard: reject hosts that resolve to loopback, link-local (incl. `169.254.169.254`), or private ranges unless `ALLOW_PRIVATE_DB_HOSTS=true`.
 - Tools: `postgres__list_tables`, `postgres__describe_table(table)`, `postgres__run_select(sql)` all **read**.
 - `run_select` rules: single statement, must start with `SELECT` or `WITH`, reject anything containing DDL/DML keywords, run inside `BEGIN READ ONLY`, `statement_timeout=10s`, cap at 500 rows.
 
 ### Meta (Phase 5)
+- Credentials: Meta app `app_id`, `app_secret` (`client_id_field='app_id'`, `client_secret_field='app_secret'`).
 - Facebook Login, code exchange on the server, then exchange for a **long-lived user token** (about 60 days) via `grant_type=fb_exchange_token`. An expired token cannot be extended, so on expiry set `needs_reauth`.
 - Start with `ads_read`. `ads_management` and the full Marketing API Access Tier need App Review. The tier was renamed from "Ads Management Standard Access" on 2026-05-04.
 - Graph API version from `META_GRAPH_VERSION`. **VERIFY** current version and permission names.
 - Tools: `meta_ads__list_ad_accounts` read, `meta_ads__get_insights(account_id, date_range, level)` read.
 
 ### Google Ads (Phase 5)
-- OAuth scope `https://www.googleapis.com/auth/adwords`, same Google endpoints.
+- OAuth scope `https://www.googleapis.com/auth/adwords`, same Google endpoints and the user's Google app credentials.
 - **Developer tokens were sunset on 2026-09-09.** Access levels (Test, Explorer, Basic, Standard) now belong to the **Google Cloud project**, and you apply on the project's Google Ads API page in Cloud Console. Do **not** build around a developer token. Explorer allows 2,880 production operations a day, Basic 15,000. **VERIFY** on the live page.
 - Tools: `google_ads__list_accessible_customers` read, `google_ads__run_gaql_query(customer_id, query)` read (reject mutate operations).
 

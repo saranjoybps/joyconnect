@@ -24,6 +24,11 @@ def all_manifests() -> dict[str, ConnectorManifest]:
         if isinstance(manifest, ConnectorManifest):
             if manifest.id in found:
                 raise RuntimeError(f"duplicate connector id: {manifest.id}")
+            if manifest.auth_type == "oauth2" and not {manifest.client_id_field, manifest.client_secret_field} <= {
+                    f.key for f in manifest.credential_fields}:
+                raise RuntimeError(f"{manifest.id}: oauth2 connectors must declare client id/secret credential_fields")
+            if manifest.auth_type != "oauth2" and manifest.validate_credentials is None:
+                raise RuntimeError(f"{manifest.id}: {manifest.auth_type} connectors need validate_credentials")
             for tool in manifest.tools:
                 if not tool.name.startswith(f"{manifest.id}__"):
                     raise RuntimeError(f"tool {tool.name} must be prefixed with {manifest.id}__")

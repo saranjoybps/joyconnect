@@ -14,7 +14,7 @@ from app.core.logging import setup_logging
 from app.core.secrets import SecretStore, build_secret_store
 from app.db.client import Database, SupabaseRestDatabase
 from app.oauth import router as oauth_router
-from app.routers import approvals, chat, connections, health
+from app.routers import approvals, chat, connections, health, provider_apps
 
 
 def create_app(
@@ -65,6 +65,7 @@ def create_app(
     app.include_router(oauth_router.router)
     app.include_router(chat.router)
     app.include_router(approvals.router)
+    app.include_router(provider_apps.router)
     return app
 
 

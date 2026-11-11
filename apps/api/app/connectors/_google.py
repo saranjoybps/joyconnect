@@ -8,7 +8,7 @@ import re
 
 import httpx
 
-from app.connectors.base import ConnectorManifest, TokenSet, ToolDef
+from app.connectors.base import ConnectorManifest, ResolvedApp, TokenSet, ToolDef, oauth_client_fields
 
 AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -37,9 +37,25 @@ async def google_account_label(http: httpx.AsyncClient, token: TokenSet, setting
     return email
 
 
-async def google_revoke(http: httpx.AsyncClient, m: ConnectorManifest, token: TokenSet, settings) -> None:
+async def google_revoke(http: httpx.AsyncClient, m: ConnectorManifest, token: TokenSet, settings,
+                        app: ResolvedApp) -> None:
     await http.post(REVOKE_URL, data={"token": token.refresh_token or token.access_token},
                     headers={"Content-Type": "application/x-www-form-urlencoded"})
+
+
+CREDENTIAL_FIELDS = oauth_client_fields(
+    id_help="Google Cloud Console > Google Auth Platform > Clients > your Web application client.",
+    secret_help="Shown when you create the client (starts with GOCSPX-).",
+    id_pattern=r"[0-9]+-[0-9A-Za-z_]+\.apps\.googleusercontent\.com",
+    id_hint="Should look like 1234567890-abc123.apps.googleusercontent.com",
+)
+SETUP_GUIDE = [
+    "Create a Google Cloud project, then enable the Google Sheets, Docs and Calendar APIs.",
+    "Google Auth Platform > Audience: choose External and add yourself as a test user.",
+    "Data access: add the scopes listed below.",
+    "Clients > Create client > Web application, and add every redirect URI listed below.",
+    "Copy the client ID and secret here. One Google app serves Sheets, Docs and Calendar.",
+]
 
 
 def google_manifest(*, id: str, name: str, description: str, scopes: list[str], tools: list[ToolDef]) -> ConnectorManifest:
@@ -56,8 +72,10 @@ def google_manifest(*, id: str, name: str, description: str, scopes: list[str], 
         extra_authorize_params={"access_type": "offline", "prompt": "consent", "include_granted_scopes": "true"},
         token_auth_style="body",
         pkce=True,
-        client_id_setting="google_client_id",
-        client_secret_setting="google_client_secret",
+        app_provider="google",
+        credential_fields=CREDENTIAL_FIELDS,
+        console_url="https://console.cloud.google.com/auth/clients",
+        setup_guide=SETUP_GUIDE,
         account_label=google_account_label,
         revoke=google_revoke,
         tools=tools,

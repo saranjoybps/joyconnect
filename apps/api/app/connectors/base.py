@@ -111,11 +111,55 @@ class ToolDef(BaseModel):
         return v
 
 
+class CredentialField(BaseModel):
+    """One input on the connector's Set up form."""
+
+    key: str                                   # e.g. 'client_id'
+    label: str
+    secret: bool = False                       # stored encrypted, never returned to the browser
+    help_text: str = ""
+    required: bool = True
+    pattern: str | None = None                 # format check (regex, full match)
+    pattern_hint: str = ""                     # shown when the pattern does not match
+
+
+@dataclass
+class ResolvedApp:
+    """Credentials for one connector flow: the user's provider_app or a platform default."""
+
+    provider: str                              # credential group, e.g. 'google'
+    source: Literal["user", "platform"]
+    values: dict[str, str]                     # every field, secrets included; never serialize
+    id: str | None = None                      # provider_apps.id (None for platform)
+
+    @property
+    def state_ref(self) -> str:
+        return self.id or "platform"
+
+    def __repr__(self) -> str:  # never leak secrets through repr/logging
+        return f"ResolvedApp(provider={self.provider!r}, source={self.source!r}, id={self.id!r})"
+
+
+def oauth_client_fields(*, id_help: str, secret_help: str, id_pattern: str | None = None,
+                        id_hint: str = "", extra: list[CredentialField] | None = None) -> list[CredentialField]:
+    return [
+        CredentialField(key="client_id", label="Client ID", help_text=id_help, pattern=id_pattern,
+                        pattern_hint=id_hint),
+        CredentialField(key="client_secret", label="Client secret", secret=True, help_text=secret_help),
+        *(extra or []),
+    ]
+
+
+class SetupRequired(Exception):
+    def __init__(self, connector_name: str):
+        super().__init__(f"{connector_name} is not set up yet. Add your app credentials on the Connections page.")
+
+
 # Hook signatures
 ParseTokenResponse = Callable[[dict[str, Any]], TokenSet]
-AccountLabel = Callable[[httpx.AsyncClient, TokenSet, "Settings"], Awaitable[str | None]]
-Revoke = Callable[[httpx.AsyncClient, "ConnectorManifest", TokenSet, "Settings"], Awaitable[None]]
-ValidateCredentials = Callable[[httpx.AsyncClient, dict[str, Any], "Settings"], Awaitable[tuple[TokenSet, str]]]
+AccountLabel = Callable[[httpx.AsyncClient, TokenSet, Settings], Awaitable[str | None]]
+Revoke = Callable[[httpx.AsyncClient, "ConnectorManifest", TokenSet, Settings, ResolvedApp], Awaitable[None]]
+ValidateCredentials = Callable[[httpx.AsyncClient, dict[str, str], Settings], Awaitable[tuple[TokenSet, str | None]]]
 
 
 class ConnectorManifest(BaseModel):
@@ -135,15 +179,22 @@ class ConnectorManifest(BaseModel):
     revoke_url: str | None = None
     tools: list[ToolDef] = Field(default_factory=list)
 
+    # Credentials the user enters on the Set up form (or PLATFORM_<APP>_<FIELD> env defaults).
+    credential_fields: list[CredentialField] = Field(default_factory=list)
+    app_provider: str | None = None            # shared credential group (defaults to id)
+    client_id_field: str = "client_id"         # which fields are the OAuth client id/secret
+    client_secret_field: str = "client_secret"
+    console_url: str | None = None             # provider developer console
+    setup_guide: list[str] = Field(default_factory=list)
+    invalid_client_errors: frozenset[str] = frozenset({"invalid_client", "unauthorized_client"})
+
     # Generic knobs for providers that deviate from plain OAuth2.
-    client_id_setting: str | None = None       # Settings attribute names
-    client_secret_setting: str | None = None
     scope_param: str = "scope"
     scope_separator: str = " "
     token_body_format: Literal["form", "json"] = "form"
     token_request_headers: dict[str, str] = Field(default_factory=dict)
     reauth_errors: frozenset[str] = frozenset({"invalid_grant"})
-    setup_url: str | None = None               # e.g. GitHub App install page
+    setup_url: str | None = None               # e.g. GitHub App install page; {field} placeholders
 
     # Optional hooks.
     parse_token_response: ParseTokenResponse | None = None
@@ -151,16 +202,25 @@ class ConnectorManifest(BaseModel):
     revoke: Revoke | None = None
     validate_credentials: ValidateCredentials | None = None
 
-    def client_credentials(self, settings: "Settings") -> tuple[str, str]:
-        cid = getattr(settings, self.client_id_setting, "") if self.client_id_setting else ""
-        secret = getattr(settings, self.client_secret_setting, "") if self.client_secret_setting else ""
-        return cid, secret
+    @property
+    def credentials_key(self) -> str:
+        return self.app_provider or self.id
 
-    def is_configured(self, settings: "Settings") -> bool:
-        if self.auth_type != "oauth2":
-            return True
-        cid, secret = self.client_credentials(settings)
-        return bool(cid and secret)
+    def client_credentials(self, app: ResolvedApp) -> tuple[str, str]:
+        return app.values.get(self.client_id_field, ""), app.values.get(self.client_secret_field, "")
+
+    def field(self, key: str) -> CredentialField | None:
+        return next((f for f in self.credential_fields if f.key == key), None)
+
+    def platform_app(self, settings: Settings) -> ResolvedApp | None:
+        """Platform default app from env, if every required field is present."""
+        if not self.credential_fields:
+            return None
+        values = {f.key: settings.platform_value(self.credentials_key, f.key) for f in self.credential_fields}
+        if any(f.required and not values[f.key] for f in self.credential_fields):
+            return None
+        return ResolvedApp(provider=self.credentials_key, source="platform",
+                           values={k: v for k, v in values.items() if v})
 
     def tool(self, name: str) -> ToolDef:
         for t in self.tools:

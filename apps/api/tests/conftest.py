@@ -14,6 +14,14 @@ JWT_SECRET = "test-jwt-secret-with-enough-length-1234567890"
 USER_A = "11111111-1111-1111-1111-111111111111"
 USER_B = "22222222-2222-2222-2222-222222222222"
 
+# Platform-default provider apps (the env fallback). Tests for user-entered apps clear these.
+PLATFORM_DEFAULTS = {
+    "PLATFORM_GOOGLE_CLIENT_ID": "g-id", "PLATFORM_GOOGLE_CLIENT_SECRET": "g-secret",
+    "PLATFORM_SLACK_CLIENT_ID": "s-id", "PLATFORM_SLACK_CLIENT_SECRET": "s-secret",
+    "PLATFORM_NOTION_CLIENT_ID": "n-id", "PLATFORM_NOTION_CLIENT_SECRET": "n-secret",
+    "PLATFORM_GITHUB_CLIENT_ID": "gh-id", "PLATFORM_GITHUB_CLIENT_SECRET": "gh-secret",
+}
+
 
 @pytest.fixture
 def settings() -> Settings:
@@ -24,14 +32,8 @@ def settings() -> Settings:
         supabase_jwt_secret=JWT_SECRET,
         token_encryption_key=base64.b64encode(os.urandom(32)).decode(),
         oauth_state_secret=base64.b64encode(os.urandom(32)).decode(),
-        google_client_id="g-id",
-        google_client_secret="g-secret",
-        slack_client_id="s-id",
-        slack_client_secret="s-secret",
-        notion_client_id="n-id",
-        notion_client_secret="n-secret",
-        github_app_client_id="gh-id",
-        github_app_client_secret="gh-secret",
+        read_platform_env=False,
+        platform_defaults=dict(PLATFORM_DEFAULTS),
     )
 
 

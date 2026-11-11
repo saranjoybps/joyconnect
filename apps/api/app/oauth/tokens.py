@@ -8,18 +8,19 @@ from typing import Any
 
 import httpx
 
-from app.connectors.base import ConnectorManifest, OAuthError, TokenSet
+from app.connectors.base import ConnectorManifest, OAuthError, ResolvedApp, SetupRequired, TokenSet
 from app.connectors.registry import get_manifest
 from app.core.config import Settings
 from app.core.secrets import SecretNotFound, SecretStore
 from app.db.client import Database
+from app.oauth.apps import ProviderAppService
 from app.oauth.providers import refresh_tokens, revoke_tokens
 
 log = logging.getLogger(__name__)
 REFRESH_LEEWAY_SECONDS = 60
 
 PUBLIC_FIELDS = ("id", "provider", "status", "account_label", "scopes", "expires_at",
-                 "auto_approve_writes", "created_at")
+                 "auto_approve_writes", "created_at", "provider_app_id")
 
 
 class NeedsReauth(Exception):
@@ -39,13 +40,15 @@ def _iso(epoch: int | None) -> str | None:
 class TokenService:
     def __init__(self, db: Database, store: SecretStore, http: httpx.AsyncClient, settings: Settings):
         self.db, self.store, self.http, self.settings = db, store, http, settings
+        self.apps = ProviderAppService(db, store, settings)
 
     async def get_connection(self, user_id: str, connection_id: str) -> dict[str, Any] | None:
         rows = await self.db.select("connections", {"id": connection_id, "user_id": user_id})
         return rows[0] if rows else None
 
     async def save_connection(
-        self, user_id: str, manifest: ConnectorManifest, token: TokenSet, label: str | None
+        self, user_id: str, manifest: ConnectorManifest, token: TokenSet, label: str | None,
+        app: ResolvedApp | None = None,
     ) -> dict[str, Any]:
         """Insert or replace the (user, provider, account_label) connection."""
         secret_id = await self.store.put(user_id, token.payload())
@@ -54,6 +57,7 @@ class TokenService:
             "scopes": token.scopes or manifest.scopes,
             "secret_id": secret_id,
             "expires_at": _iso(token.expires_at),
+            "provider_app_id": app.id if app else None,
         }
         existing = await self.db.select(
             "connections", {"user_id": user_id, "provider": manifest.id, "account_label": label}
@@ -96,7 +100,12 @@ class TokenService:
             await self.mark(connection["id"], "needs_reauth")
             raise NeedsReauth(connection["id"])
         try:
-            new = await refresh_tokens(self.http, manifest, self.settings, token)
+            app = await self.apps.for_connection(connection, manifest)
+        except SetupRequired as exc:  # the app that made this connection is gone
+            await self.mark(connection["id"], "needs_reauth")
+            raise NeedsReauth(connection["id"]) from exc
+        try:
+            new = await refresh_tokens(self.http, manifest, app, token)
         except OAuthError as exc:
             if exc.code in manifest.reauth_errors or exc.code == "no_refresh_token":
                 log.info("refresh rejected for connection %s (%s); needs reauth", connection["id"], exc.code)
@@ -119,7 +128,8 @@ class TokenService:
         if manifest and secret_id:
             try:
                 token = TokenSet.from_payload(await self.store.get(secret_id))
-                await revoke_tokens(self.http, manifest, self.settings, token)
+                app = await self.apps.for_connection(connection, manifest)
+                await revoke_tokens(self.http, manifest, self.settings, app, token)
             except Exception as exc:  # noqa: BLE001 — revoke must not block local cleanup
                 log.warning("provider revoke failed for %s: %s", connection["provider"], type(exc).__name__)
         await self._delete_secret(secret_id)

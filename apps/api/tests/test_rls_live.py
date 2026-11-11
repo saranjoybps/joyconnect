@@ -63,3 +63,27 @@ def test_user_a_cannot_read_user_b(conn):
     # Non-secret columns of the base table are readable, own rows only.
     cur.execute("select count(*) from public.connections where user_id = %s", (b,))
     assert cur.fetchone()[0] == 0
+
+
+def test_provider_apps_isolated_and_secret_columns_hidden(conn):
+    import psycopg
+
+    a, b = str(uuid.uuid4()), str(uuid.uuid4())
+    cur = conn.cursor()
+    for uid in (a, b):
+        cur.execute("insert into auth.users (id, email, aud, role) values (%s, %s, 'authenticated', 'authenticated')",
+                    (uid, f"{uid}@rls.test"))
+        cur.execute("insert into public.provider_apps (user_id, provider, client_id, secret_id) "
+                    "values (%s, 'github', 'Iv-client', 'secret-pointer')", (uid,))
+    _as_user(cur, a)
+    cur.execute("select user_id::text from public.provider_apps where user_id in (%s, %s)", (a, b))
+    assert [r[0] for r in cur.fetchall()] == [a]
+    for sql in ("select client_id from public.provider_apps",
+                "select secret_id from public.provider_apps",
+                "select extra from public.provider_apps",
+                "insert into public.provider_apps (user_id, provider) values (auth.uid(), 'x')",
+                "delete from public.provider_apps"):
+        cur.execute("savepoint t")
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            cur.execute(sql)
+        cur.execute("rollback to savepoint t")
