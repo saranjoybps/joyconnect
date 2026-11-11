@@ -66,11 +66,16 @@ def make_client(settings, db, store):
         c.__exit__(None, None, None)
 
 
-async def connect(db, store, provider, user=USER_A, auto=False, status="active"):
-    t = TokenSet(access_token="tok", expires_at=int(time.time()) + 3600)
+async def connect(db, store, provider, user=USER_A, auto=False, status="active", scopes=None,
+                  label="acct", token="tok"):
+    """A connection that was granted every scope its connector requests, unless `scopes` says otherwise."""
+    from app.connectors.registry import get_manifest
+
+    t = TokenSet(access_token=token, expires_at=int(time.time()) + 3600)
     sid = await store.put(user, t.payload())
-    return await db.insert("connections", {"user_id": user, "provider": provider, "account_label": "acct",
-                                           "scopes": [], "secret_id": sid, "status": status,
+    granted = list(get_manifest(provider).scopes) if scopes is None else scopes
+    return await db.insert("connections", {"user_id": user, "provider": provider, "account_label": label,
+                                           "scopes": granted, "secret_id": sid, "status": status,
                                            "auto_approve_writes": auto})
 
 

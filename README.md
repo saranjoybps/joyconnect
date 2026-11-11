@@ -107,6 +107,18 @@ This runs `cloudflared tunnel run connect-dev` and sets `PUBLIC_API_BASE_URL=htt
 tunnel. The browser keeps calling `http://localhost:8000` for chat (`NEXT_PUBLIC_API_BASE_URL`); after the
 callback the API redirects the browser back to `WEB_BASE_URL` (localhost), so nothing else changes.
 
+## Troubleshooting: "insufficient authentication scopes" (Google)
+
+Google's consent screen has one checkbox per permission, and the user can leave one **unticked** while
+still pressing Continue. Google then returns a token without that permission, and the Google API answers
+403 "Request had insufficient authentication scopes". The app stores exactly the scopes Google returned
+(shown under "Granted permissions" on the card). If one the connector needs is missing the card shows
+**Partial access**, and chat answers "Reconnect Google Sheets and tick the Sheets permission" instead of a
+raw 403. To fix it: click **Reconnect** on that card and tick every permission box on Google's screen.
+If the box is not offered at all, add the scope under Google Auth Platform → Data access and make sure
+the matching API is enabled. If Google keeps skipping it, remove the app at
+https://myaccount.google.com/permissions and connect again.
+
 ## Provider apps: each user brings their own
 
 Provider credentials are **not** server config. Each user creates an app in the provider's developer

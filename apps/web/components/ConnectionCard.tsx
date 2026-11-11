@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ProviderSetupPanel } from "@/components/ProviderSetupPanel";
-import { cardState, type CardState, type Connection, type Connector } from "@/lib/connections";
+import { cardState, scopeLabel, type CardState, type Connection, type Connector } from "@/lib/connections";
 
 type Props = {
   connector: Connector;
@@ -17,6 +17,7 @@ type Props = {
 const BADGE: Record<CardState, { text: string; cls: string }> = {
   not_set_up: { text: "Not set up", cls: "bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300" },
   ready: { text: "Ready to connect", cls: "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-200" },
+  partial: { text: "Partial access", cls: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" },
   connected: { text: "Connected", cls: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200" },
   needs_reconnect: { text: "Needs reconnect", cls: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" },
 };
@@ -31,7 +32,7 @@ export function ConnectionCard({
   const badge = BADGE[state];
   const { setup } = connector;
 
-  const connectLabel = state === "needs_reconnect" ? "Reconnect"
+  const connectLabel = state === "needs_reconnect" || state === "partial" ? "Reconnect"
     : state === "connected" ? "Connect another account" : "Connect";
 
   return (
@@ -77,6 +78,21 @@ export function ConnectionCard({
                   </button>
                 )}
               </div>
+              {c.partial && (
+                <p role="alert" className="mt-2 rounded-md bg-amber-50 p-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
+                  {connector.auth_type === "oauth2" ? "The provider" : "This app"} did not grant:{" "}
+                  {(c.missing_scopes ?? []).map(scopeLabel).join(", ")}. Reconnect {connector.name} and tick the{" "}
+                  {connector.name.replace(/^Google /, "")} permission on the consent screen.
+                </p>
+              )}
+              {c.scopes.length > 0 && (
+                <details className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">
+                  <summary className="cursor-pointer">Granted permissions ({c.scopes.length})</summary>
+                  <ul className="mt-1 list-disc pl-4">
+                    {c.scopes.map((s) => <li key={s}>{scopeLabel(s)}</li>)}
+                  </ul>
+                </details>
+              )}
               <label className="mt-2 flex items-center gap-2">
                 <input type="checkbox" checked={c.auto_approve_writes} disabled={busy}
                   onChange={(e) => onToggleAutoApprove(c, e.target.checked)} />

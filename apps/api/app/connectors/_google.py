@@ -69,6 +69,8 @@ def google_manifest(*, id: str, name: str, description: str, scopes: list[str], 
         token_url=TOKEN_URL,
         revoke_url=REVOKE_URL,
         scopes=IDENTITY_SCOPES + scopes,
+        verifies_scopes=True,                  # Google's token response lists the granted scopes
+        permission_label=name.removeprefix("Google "),
         extra_authorize_params={"access_type": "offline", "prompt": "consent", "include_granted_scopes": "true"},
         token_auth_style="body",
         pkce=True,

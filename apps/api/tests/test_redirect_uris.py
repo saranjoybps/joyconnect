@@ -13,8 +13,16 @@ from tests.conftest import USER_A, auth
 from tests.test_oauth_flow import _id_token, callback, start
 
 TUNNEL = "https://random-words.trycloudflare.com"
-GOOGLE_TOKEN = {"access_token": "ya29.A", "refresh_token": "1//R", "expires_in": 3599, "token_type": "Bearer",
-                "scope": "openid email", "id_token": _id_token("a@gmail.com")}
+
+
+def google_token(connector: str) -> dict:
+    """A token response where Google granted everything the connector asked for."""
+    from app.connectors.registry import get_manifest
+
+    return {"access_token": "ya29.A", "refresh_token": "1//R", "expires_in": 3599, "token_type": "Bearer",
+            "scope": " ".join(get_manifest(connector).scopes), "id_token": _id_token("a@gmail.com")}
+
+
 GH_ID = "Iv23liABCDEFGH123456"
 
 
@@ -86,7 +94,7 @@ def test_shared_google_callback_routes_by_state(client, db, settings, connector)
     _, q = start(client, connector)
     assert q["redirect_uri"].endswith("/api/oauth/callback/google")
     assert verify_state(settings.oauth_state_secret, q["state"])["p"] == connector
-    route = respx.post("https://oauth2.googleapis.com/token").respond(json=GOOGLE_TOKEN)
+    route = respx.post("https://oauth2.googleapis.com/token").respond(json=google_token(connector))
 
     resp = callback(client, "google", code="c", state=q["state"])
     assert resp.status_code == 303
@@ -118,7 +126,7 @@ def test_legacy_callback_route_still_works_with_its_own_redirect_uri(client, db,
     db.tables.setdefault("oauth_states", []).append({
         "state": state, "user_id": USER_A, "provider": "google_sheets", "code_verifier": "v" * 50,
         "created_at": datetime.now(timezone.utc).isoformat()})
-    route = respx.post("https://oauth2.googleapis.com/token").respond(json=GOOGLE_TOKEN)
+    route = respx.post("https://oauth2.googleapis.com/token").respond(json=google_token("google_sheets"))
     resp = callback(client, "google_sheets", code="c", state=state)
     assert resp.headers["location"] == "http://localhost:3000/connections?connected=google_sheets"
     assert parse_qs(route.calls[0].request.content.decode())["redirect_uri"] == [

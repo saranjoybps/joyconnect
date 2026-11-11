@@ -18,7 +18,12 @@ export function ConnectionsView() {
   const notice = useMemo(() => {
     const connected = params.get("connected");
     const err = params.get("error");
+    const partial = params.get("partial");
     if (err) return { kind: "error" as const, text: describeOAuthError(err) };
+    if (partial) {
+      return { kind: "warn" as const,
+        text: `Connected, but Google did not grant the ${partial} permission. Click Reconnect and tick the ${partial} permission on Google's consent screen.` };
+    }
     if (connected) return { kind: "ok" as const, text: "Connected successfully." };
     return null;
   }, [params]);
@@ -82,7 +87,9 @@ export function ConnectionsView() {
         <div role="status"
           className={`flex items-center justify-between rounded-lg p-3 text-sm ${notice.kind === "error"
             ? "bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200"
-            : "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"}`}>
+            : notice.kind === "warn"
+              ? "bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100"
+              : "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"}`}>
           <span>{notice.text}</span>
           <button type="button" className="underline" onClick={() => router.replace("/connections")}>Dismiss</button>
         </div>

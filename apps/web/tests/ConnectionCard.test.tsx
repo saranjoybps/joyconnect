@@ -74,6 +74,27 @@ describe("ConnectionCard states", () => {
     expect(h.onDisconnect).toHaveBeenCalledWith(expect.objectContaining({ id: "c1" }));
   });
 
+  it("Partial access: shows what Google did not grant, the granted permissions, and Reconnect", async () => {
+    const SHEETS = "https://www.googleapis.com/auth/spreadsheets";
+    const sheets: Connector = { ...ready, id: "google_sheets", name: "Google Sheets" };
+    setup(sheets, [conn({ provider: "google_sheets", partial: true, missing_scopes: [SHEETS],
+      scopes: ["openid", "https://www.googleapis.com/auth/userinfo.email"] })]);
+    expect(screen.getByText("Partial access")).toBeInTheDocument();
+    expect(screen.queryByText("Connected")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/did not grant: Google Sheets \(read and write\)/);
+    expect(screen.getByRole("alert")).toHaveTextContent("Reconnect Google Sheets and tick the Sheets permission");
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument();
+    await userEvent.click(screen.getByText(/Granted permissions \(2\)/));
+    expect(screen.getByText("Email address")).toBeInTheDocument();
+    expect(screen.getByText("Sign-in (openid)")).toBeInTheDocument();
+  });
+
+  it("Connected with every permission shows no warning", () => {
+    setup(ready, [conn({ partial: false, missing_scopes: [], scopes: ["openid"] })]);
+    expect(screen.getByText("Connected")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("Needs reconnect", () => {
     setup(ready, [conn({ status: "needs_reauth" })]);
     expect(screen.getByText("Needs reconnect")).toBeInTheDocument();

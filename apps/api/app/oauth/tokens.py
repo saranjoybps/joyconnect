@@ -8,7 +8,9 @@ from typing import Any
 
 import httpx
 
-from app.connectors.base import ConnectorManifest, OAuthError, ResolvedApp, SetupRequired, TokenSet
+from app.connectors.base import (
+    ConnectorManifest, OAuthError, ResolvedApp, SetupRequired, TokenSet, missing_scopes,
+)
 from app.connectors.registry import get_manifest
 from app.core.config import Settings
 from app.core.secrets import SecretNotFound, SecretStore
@@ -29,8 +31,21 @@ class NeedsReauth(Exception):
         self.connection_id = connection_id
 
 
+def missing_for(row: dict[str, Any]) -> list[str]:
+    """Functional scopes this connection's connector needs but Google/the provider did not grant."""
+    m = get_manifest(row.get("provider", ""))
+    if m is None or not m.verifies_scopes:
+        return []
+    return missing_scopes(row.get("scopes"), m.functional_scopes())
+
+
 def public_view(row: dict[str, Any]) -> dict[str, Any]:
-    return {k: row.get(k) for k in PUBLIC_FIELDS}
+    out = {k: row.get(k) for k in PUBLIC_FIELDS}
+    missing = missing_for(row)
+    # "partial": connected, but the provider granted less than the connector needs.
+    out["missing_scopes"] = missing
+    out["partial"] = bool(missing)
+    return out
 
 
 def _iso(epoch: int | None) -> str | None:
@@ -54,7 +69,10 @@ class TokenService:
         secret_id = await self.store.put(user_id, token.payload())
         values = {
             "status": "active",
-            "scopes": token.scopes or manifest.scopes,
+            # Store what the provider actually granted. Only providers that do not report scopes
+            # (Notion, GitHub) fall back to the requested list; never for Google, where the
+            # user can untick a permission on the consent screen.
+            "scopes": token.scopes or ([] if manifest.verifies_scopes else manifest.scopes),
             "secret_id": secret_id,
             "expires_at": _iso(token.expires_at),
             "provider_app_id": app.id if app else None,

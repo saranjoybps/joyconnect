@@ -24,7 +24,7 @@ from app.deps import DbDep, HttpDep, StoreDep
 from app.oauth.apps import ProviderAppService
 from app.oauth.providers import build_authorize_url, exchange_code
 from app.oauth.state import STATE_TTL_SECONDS, StateError, pkce_pair, sign_state, verify_state
-from app.oauth.tokens import TokenService, public_view
+from app.oauth.tokens import TokenService, missing_for, public_view
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["oauth"])
@@ -61,7 +61,9 @@ async def start(provider: str, user: UserDep, db: DbDep, store: StoreDep, http: 
     state = sign_state(settings.oauth_state_secret, user.id, m.id, app.state_ref)
     verifier, challenge = pkce_pair() if m.pkce else (None, None)
     await db.insert("oauth_states", {"state": state, "user_id": user.id, "provider": m.id, "code_verifier": verifier})
-    return {"authorize_url": build_authorize_url(m, settings, app, state, challenge)}
+    url = build_authorize_url(m, settings, app, state, challenge)
+    log.info("authorize connector=%s app=%s scopes=%s", m.id, app.source, m.scopes)
+    return {"authorize_url": url}
 
 
 def _back_to_web(settings: Settings, **params: str) -> RedirectResponse:
@@ -130,5 +132,11 @@ async def callback(
         log.warning("provider call failed during %s callback: %s", connector, type(exc).__name__)
         return _back_to_web(settings, error="provider_unavailable", provider=connector)
 
-    await TokenService(db, store, http, settings).save_connection(user_id, m, token, label, app)
+    row = await TokenService(db, store, http, settings).save_connection(user_id, m, token, label, app)
+    missing = missing_for(row)
+    log.info("callback saved connection=%s connector=%s granted=%s requested=%s missing=%s",
+             row["id"], connector, sorted(row["scopes"] or []), m.scopes, missing)
+    if missing:
+        # Connected, but the provider granted less than the connector needs (user unticked a box).
+        return _back_to_web(settings, connected=connector, partial=m.permission_name)
     return _back_to_web(settings, connected=connector)

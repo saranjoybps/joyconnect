@@ -92,6 +92,8 @@ class ToolDef(BaseModel):
     parameters: dict[str, Any]
     risk: Risk
     handler: ToolHandler
+    # Scopes this tool needs on the token it runs with. Empty = the connector's functional scopes.
+    scopes: list[str] = Field(default_factory=list)
 
     @field_validator("name")
     @classmethod
@@ -196,6 +198,11 @@ class ConnectorManifest(BaseModel):
     reauth_errors: frozenset[str] = frozenset({"invalid_grant"})
     # Does the provider accept an http://localhost redirect URI?  Only "yes"/"no" when the
     # provider's own docs say so (see docs/decisions.md); otherwise "unverified".
+    # Providers whose token response lists the scopes actually granted (Google). For these the
+    # stored scopes are exactly what the provider returned, and a missing functional scope marks
+    # the connection "partial" instead of silently assuming everything requested was granted.
+    verifies_scopes: bool = False
+    permission_label: str | None = None          # human name of the permission, e.g. "Sheets"
     localhost_redirect: Literal["yes", "no", "unverified"] = "unverified"
     redirect_note: str | None = None             # shown under the redirect URI in the Set up panel
     setup_url: str | None = None               # e.g. GitHub App install page; {field} placeholders
@@ -205,6 +212,17 @@ class ConnectorManifest(BaseModel):
     account_label: AccountLabel | None = None
     revoke: Revoke | None = None
     validate_credentials: ValidateCredentials | None = None
+
+    def functional_scopes(self) -> list[str]:
+        """Requested scopes that tools need (everything except identity scopes)."""
+        return [s for s in self.scopes if normalize_scope(s) not in IDENTITY_SCOPES]
+
+    def required_scopes(self, tool: "ToolDef | None" = None) -> list[str]:
+        return list(tool.scopes) if tool is not None and tool.scopes else self.functional_scopes()
+
+    @property
+    def permission_name(self) -> str:
+        return self.permission_label or self.name
 
     @property
     def credentials_key(self) -> str:
@@ -231,6 +249,23 @@ class ConnectorManifest(BaseModel):
             if t.name == name:
                 return t
         raise KeyError(name)
+
+
+# Identity scopes only give us the account label; no tool needs them.
+IDENTITY_SCOPES = frozenset({"openid", "email", "profile"})
+_SCOPE_ALIASES = {
+    "https://www.googleapis.com/auth/userinfo.email": "email",
+    "https://www.googleapis.com/auth/userinfo.profile": "profile",
+}
+
+
+def normalize_scope(scope: str) -> str:
+    return _SCOPE_ALIASES.get(scope, scope)
+
+
+def missing_scopes(granted: list[str] | None, required: list[str]) -> list[str]:
+    have = {normalize_scope(s) for s in granted or []}
+    return [s for s in required if normalize_scope(s) not in have]
 
 
 def default_parse_token_response(data: dict[str, Any]) -> TokenSet:

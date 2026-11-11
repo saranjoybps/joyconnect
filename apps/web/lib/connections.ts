@@ -63,12 +63,30 @@ export type Connection = {
   auto_approve_writes: boolean;
   created_at: string;
   provider_app_id: string | null;
+  /** Permissions the connector needs that the provider did not grant (user unticked them). */
+  missing_scopes?: string[];
+  partial?: boolean;
 };
 
-export type CardState = "not_set_up" | "ready" | "connected" | "needs_reconnect";
+export type CardState = "not_set_up" | "ready" | "connected" | "partial" | "needs_reconnect";
+
+const SCOPE_NAMES: Record<string, string> = {
+  openid: "Sign-in (openid)",
+  email: "Email address",
+  "https://www.googleapis.com/auth/userinfo.email": "Email address",
+  "https://www.googleapis.com/auth/spreadsheets": "Google Sheets (read and write)",
+  "https://www.googleapis.com/auth/documents": "Google Docs (read and write)",
+  "https://www.googleapis.com/auth/calendar.events": "Google Calendar events",
+};
+
+/** Human name for a granted scope; unknown scopes show their last path segment. */
+export function scopeLabel(scope: string): string {
+  return SCOPE_NAMES[scope] ?? scope.split("/").pop() ?? scope;
+}
 
 export function cardState(connector: Connector, connections: Connection[]): CardState {
   if (connections.some((c) => c.status === "needs_reauth")) return "needs_reconnect";
+  if (connections.some((c) => c.partial)) return "partial";
   if (connections.length > 0) return "connected";
   return connector.configured ? "ready" : "not_set_up";
 }

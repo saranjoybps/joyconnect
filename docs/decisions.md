@@ -117,3 +117,25 @@ Each entry: what CLAUDE.md says, what the live docs say (checked 2026-11-11), wh
   tunnel if rejected. Meta: "Enforce HTTPS" is on by default; localhost is only exempt in development mode per a
   2018 announcement, no current doc found, so use the tunnel (VERIFY in the App Dashboard in Phase 4).
 - **Tunnel is optional and local-only**: quick tunnels do not carry SSE, so chat stays on `API_BASE_URL`.
+
+## Granted scopes are stored as returned, and checked per tool
+
+- **Bug (2026-11-11).** Google Sheets `create_spreadsheet` failed with 403 "insufficient authentication
+  scopes" although the card said Connected. The database showed the `google_sheets` connection held only
+  `openid` + `userinfo.email`: Google had not granted the `spreadsheets` scope (granular consent: the
+  checkbox was unticked). Calendar and Docs tokens held their own scopes (merged by
+  `include_granted_scopes`) but not Sheets either. Our code stored the token response `scope` honestly but
+  never compared it with what the connector needs, so the card showed Connected, the tool ran, and Google
+  answered with a raw 403. The tool binding, the authorize URL and the callback were not at fault.
+- **Fix.** `ConnectorManifest.verifies_scopes` (Google) turns on three things: the stored scopes are never
+  replaced by the requested list when the response omits `scope`; a connection missing a functional scope is
+  reported as `partial` (computed, no new status value) with `missing_scopes`; and each tool is bound to a
+  connection whose scopes cover `ToolDef.scopes` (default: the connector's functional scopes).
+- **Selection order**: the connector's own connections, then another connection of the same credential group
+  *and the same Google account label* (Google merges earlier grants, so a Docs token may carry Sheets). Never
+  another user's. Auto-approve needs both the card toggled and the connection actually used to allow it.
+- **Friendly failure**: a tool whose connection lacks the scope never calls Google and never asks for
+  approval; it returns "Reconnect Google Sheets and tick the Sheets permission". A raw 403
+  "insufficient" from Google (revoked grant) is mapped to the same message.
+- **tokeninfo not used**: the token response `scope` field is authoritative and documented; tokeninfo would
+  put the access token in a URL.

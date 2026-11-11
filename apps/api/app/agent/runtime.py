@@ -15,7 +15,10 @@ import httpx
 from app.agent.llm import LLM, LLMError, LLMResult
 from app.agent.policy import build_preview, decide, redact_args, tool_label
 from app.agent.prompts import system_prompt
-from app.agent.tools import MAX_RESULT_CHARS, BoundTool, ToolExecutor, available_tools, to_openai_tool, validate_args
+from app.agent.tools import (
+    MAX_RESULT_CHARS, BoundTool, ToolExecutor, available_tools, log_scope_mismatch, pick_connection,
+    to_openai_tool, validate_args,
+)
 from app.connectors.registry import get_manifest
 from app.core.config import Settings
 from app.core.secrets import SecretStore
@@ -197,7 +200,15 @@ class AgentRuntime:
             "tool": name, "args_redacted": redact_args(args), "status": "pending",
         })
 
-        if decide(bound.tool.risk, bool(bound.connection.get("auto_approve_writes"))) == "ask":
+        if bound.missing:
+            # Nothing to approve: the call cannot succeed. Tell the model (and so the user) how to fix it.
+            ok, result = False, {"error": bound.scope_error()}
+            log_scope_mismatch(bound)
+            await self._finish_call(user_id, conversation_id, run["id"], call_id, ok, result, "error")
+            yield _ev("tool_result", id=call_id, tool=name, ok=ok, summary=_summary(ok, result))
+            return
+
+        if decide(bound.tool.risk, bound.auto_approve) == "ask":
             preview = build_preview(bound.manifest, bound.tool, args, tool_call_id=call_id,
                                     conversation_id=conversation_id,
                                     account_label=bound.connection.get("account_label"))
@@ -237,7 +248,10 @@ class AgentRuntime:
         if not conns:
             return None
         try:
-            return BoundTool(manifest, manifest.tool(tool_name), conns[0])
+            tool = manifest.tool(tool_name)
+            all_active = await self.db.select("connections", {"user_id": user_id, "status": "active"},
+                                              order="created_at.desc")
+            return BoundTool(manifest, tool, pick_connection(manifest, tool, conns[0], all_active), conns[0])
         except KeyError:
             return None
 

@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 
-from app.connectors.base import ConnectorManifest, ToolContext, ToolDef, ToolError
+from app.connectors.base import ConnectorManifest, ToolContext, ToolDef, ToolError, missing_scopes
 from app.connectors.registry import get_manifest
 from app.core.config import Settings
 from app.core.secrets import SecretStore
@@ -24,7 +24,51 @@ MAX_RESULT_CHARS = 12_000
 class BoundTool:
     manifest: ConnectorManifest
     tool: ToolDef
-    connection: dict[str, Any]
+    connection: dict[str, Any]                      # the connection whose token will be used
+    own_connection: dict[str, Any] | None = None    # the tool's own connector's connection (its card)
+
+    @property
+    def missing(self) -> list[str]:
+        """Scopes this tool needs that the chosen connection was not granted ([] = fine or not checked)."""
+        if not self.manifest.verifies_scopes:
+            return []
+        return missing_scopes(self.connection.get("scopes"), self.manifest.required_scopes(self.tool))
+
+    @property
+    def auto_approve(self) -> bool:
+        """Auto-approve only if the card the user toggled AND the connection used both allow it."""
+        own = self.own_connection or self.connection
+        return bool(own.get("auto_approve_writes")) and bool(self.connection.get("auto_approve_writes"))
+
+    def scope_error(self) -> str:
+        label = self.manifest.permission_name
+        return (f"{self.manifest.name} is connected, but Google did not grant the {label} permission, "
+                f"so this can't run. Reconnect {self.manifest.name} and tick the {label} permission.")
+
+
+def pick_connection(manifest: ConnectorManifest, tool: ToolDef, own: dict[str, Any],
+                    active: list[dict[str, Any]]) -> dict[str, Any]:
+    """The connection a tool should run with: one whose granted scopes cover the tool's scopes.
+
+    Order: the connector's own connections (newest first), then other connections of the same
+    credential group (e.g. a Docs connection whose token also carries the Sheets scope because
+    Google merges earlier grants). A connection that lacks the scope is never chosen over one that
+    has it; if none has it we return the connector's own so the caller can report what is missing.
+    """
+    required = manifest.required_scopes(tool)
+    if not manifest.verifies_scopes or not required:
+        return own
+    group = manifest.credentials_key
+    candidates = [c for c in active if c["provider"] == manifest.id]
+    for c in active:
+        m = get_manifest(c["provider"])
+        if m is not None and c["provider"] != manifest.id and m.credentials_key == group \
+                and c.get("account_label") == own.get("account_label"):
+            candidates.append(c)
+    for c in candidates:
+        if not missing_scopes(c.get("scopes"), required):
+            return c
+    return own
 
 
 def to_openai_tool(tool: ToolDef) -> dict[str, Any]:
@@ -60,8 +104,9 @@ async def available_tools(db: Database, user_id: str, message: str, max_tools: i
     for m in manifests:
         if len(out) + len(m.tools) > max_tools:
             continue
+        own = by_provider[m.id]
         for t in m.tools:
-            out[t.name] = BoundTool(m, t, by_provider[m.id])
+            out[t.name] = BoundTool(m, t, pick_connection(m, t, own, conns), own)
     return out
 
 
@@ -75,6 +120,14 @@ def validate_args(tool: ToolDef, args: Any) -> str | None:
     return None
 
 
+def log_scope_mismatch(bound: BoundTool) -> None:
+    c = bound.connection
+    log.warning(
+        "scope check: tool=%s connector=%s connection=%s used_connector=%s granted=%s required=%s missing=%s",
+        bound.tool.name, bound.manifest.id, c.get("id"), c.get("provider"), sorted(c.get("scopes") or []),
+        bound.manifest.required_scopes(bound.tool), bound.missing)
+
+
 class ToolExecutor:
     def __init__(self, db: Database, store: SecretStore, http: httpx.AsyncClient, settings: Settings):
         self.tokens = TokenService(db, store, http, settings)
@@ -83,14 +136,22 @@ class ToolExecutor:
     async def execute(self, bound: BoundTool, args: dict[str, Any]) -> tuple[bool, Any]:
         """Returns (ok, JSON-serializable result). Never raises for provider errors."""
         name = bound.manifest.name
+        if bound.missing:
+            # Never call the provider with a token we know lacks the scope (it would be a raw 403).
+            log_scope_mismatch(bound)
+            return False, {"error": bound.scope_error()}
         try:
             token = await self.tokens.get_token(bound.connection)
             ctx = ToolContext(http=self.http, token=token, settings=self.settings, connection=bound.connection)
             return True, await bound.tool.handler(ctx, **args)
+        except ToolError as exc:
+            if "(403)" in str(exc) and "insufficient" in str(exc).lower():
+                # The token claimed the scope but Google refused (stale record, revoked grant...).
+                log_scope_mismatch(bound)   # diagnostics only: ids and scope names, never tokens
+                return False, {"error": bound.scope_error()}
+            return False, {"error": str(exc)}
         except NeedsReauth:
             return False, {"error": f"{name} needs to be reconnected on the Connections page."}
-        except ToolError as exc:
-            return False, {"error": str(exc)}
         except httpx.HTTPError as exc:
             log.warning("network error calling %s: %s", bound.tool.name, type(exc).__name__)
             return False, {"error": f"Could not reach {name}. Try again shortly."}
