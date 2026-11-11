@@ -1,3 +1,5 @@
+Read MEMORY.md first at the start of every session and update it before finishing.
+
 # CLAUDE.md — AI Integration Platform (chat-driven app connector)
 
 > Read this whole file before writing code. Build phase by phase. Do not skip ahead.
