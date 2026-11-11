@@ -14,3 +14,7 @@ next-env.d.ts
 coverage/
 .api.log
 .web.log
+
+.api.log
+.api.err.log
+.web.err.log
