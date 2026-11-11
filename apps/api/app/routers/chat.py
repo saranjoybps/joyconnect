@@ -72,3 +72,17 @@ async def get_conversation(conversation_id: str, user: UserDep, db: DbDep) -> di
         if a["preview"].get("conversation_id") == conversation_id
     ]
     return {"id": conversation_id, "title": convs[0].get("title"), "items": items, "pending_approvals": approvals}
+
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str, user: UserDep, db: DbDep) -> dict[str, Any]:
+    """Delete a conversation and its messages (cascade). tool_runs stay as an audit trail; any approval
+    still pending for it is rejected so it can no longer be used to resume the deleted chat."""
+    if not await db.select("conversations", {"id": conversation_id, "user_id": user.id}):
+        raise HTTPException(404, "conversation not found")
+    for a in await db.select("approvals", {"user_id": user.id, "status": "pending"}):
+        if (a.get("preview") or {}).get("conversation_id") == conversation_id:
+            await db.update("approvals", {"id": a["id"]}, {"status": "rejected"})
+    await db.delete("messages", {"conversation_id": conversation_id, "user_id": user.id})
+    await db.delete("conversations", {"id": conversation_id, "user_id": user.id})
+    return {"ok": True}

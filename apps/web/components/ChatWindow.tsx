@@ -45,6 +45,25 @@ export function ChatWindow() {
     }
   }
 
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  async function deleteConversation(id: string) {
+    if (busy) return;
+    try {
+      await chatApi.remove(id);
+      setConversations((list) => list.filter((c) => c.id !== id));
+      if (id === activeId) {
+        setActiveId(null);
+        setItems([]);
+      }
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setConfirmId(null);
+    }
+  }
+
   function newChat() {
     if (busy) return;
     setActiveId(null);
@@ -119,12 +138,29 @@ export function ChatWindow() {
         </button>
         <ul className="max-h-[30vh] space-y-1 overflow-auto md:max-h-[70vh]">
           {conversations.map((c) => (
-            <li key={c.id}>
-              <button type="button" onClick={() => openConversation(c.id)} aria-current={c.id === activeId ? "true" : undefined}
-                className={`w-full truncate rounded-md px-2 py-1.5 text-left text-sm ${c.id === activeId
-                  ? "bg-neutral-100 font-medium dark:bg-neutral-800" : "hover:bg-neutral-50 dark:hover:bg-neutral-900"}`}>
-                {c.title || "Untitled"}
-              </button>
+            <li key={c.id} className="flex items-center gap-1">
+              {confirmId === c.id ? (
+                <div role="group" aria-label={`Delete ${c.title || "Untitled"}?`} className="flex w-full items-center gap-1 text-sm">
+                  <span className="flex-1 truncate">Delete this chat?</span>
+                  <button type="button" onClick={() => deleteConversation(c.id)} disabled={busy}
+                    className="rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white disabled:opacity-50">Delete</button>
+                  <button type="button" onClick={() => setConfirmId(null)}
+                    className="rounded-md border border-neutral-300 px-2 py-1 text-xs dark:border-neutral-700">Cancel</button>
+                </div>
+              ) : (
+                <>
+                  <button type="button" onClick={() => openConversation(c.id)} aria-current={c.id === activeId ? "true" : undefined}
+                    className={`min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-sm ${c.id === activeId
+                      ? "bg-neutral-100 font-medium dark:bg-neutral-800" : "hover:bg-neutral-50 dark:hover:bg-neutral-900"}`}>
+                    {c.title || "Untitled"}
+                  </button>
+                  <button type="button" onClick={() => setConfirmId(c.id)} disabled={busy}
+                    aria-label={`Delete conversation ${c.title || "Untitled"}`} title="Delete conversation"
+                    className="shrink-0 rounded-md px-2 py-1 text-sm text-neutral-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-50 dark:hover:bg-neutral-800">
+                    &#x1F5D1;
+                  </button>
+                </>
+              )}
             </li>
           ))}
         </ul>

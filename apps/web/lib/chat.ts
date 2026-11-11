@@ -120,6 +120,7 @@ async function* streamPost(path: string, body: unknown): AsyncGenerator<SseEvent
 export const chatApi = {
   conversations: () => apiFetch<Conversation[]>("/api/conversations"),
   conversation: (id: string) => apiFetch<ConversationDetail>(`/api/conversations/${id}`),
+  remove: (id: string) => apiFetch<{ ok: boolean }>(`/api/conversations/${id}`, { method: "DELETE" }),
   send: (message: string, conversationId: string | null) =>
     streamPost("/api/chat", { message, conversation_id: conversationId }),
   decide: (approvalId: string, approve: boolean) =>

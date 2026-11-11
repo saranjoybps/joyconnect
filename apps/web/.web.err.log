@@ -1,0 +1,14 @@
+Error: Route "/": Could not validate `instant` because an error prevented the target segment from rendering.
+    at ignore-listed frames {
+  [cause]: Error: NEXT_REDIRECT
+      at Home (app\page.tsx:4:11)
+    2 |
+    3 | export default function Home() {
+  > 4 |   redirect("/chat");
+      |           ^
+    5 | }
+    6 | {
+    environmentName: 'Prerender',
+    digest: 'NEXT_REDIRECT;replace;/chat;307;'
+  }
+}

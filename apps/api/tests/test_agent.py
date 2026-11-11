@@ -290,3 +290,18 @@ def test_conversation_list_and_history(make_client):
     assert client.get("/api/conversations", headers=auth(USER_B)).json() == []
     items = client.get(f"/api/conversations/{conv_id}", headers=auth()).json()["items"]
     assert items == [{"kind": "user", "text": "hi there"}, {"kind": "assistant", "text": "Hello!"}]
+
+
+def test_delete_conversation_removes_it_and_its_messages(make_client, db):
+    client = make_client(FakeLLM(LLMResult(content="Hello!"), LLMResult(content="Again")))
+    conv_id = events(client.post("/api/chat", json={"message": "hi"}, headers=auth()))[-1][1]["conversation_id"]
+    other = events(client.post("/api/chat", json={"message": "keep me"}, headers=auth()))[-1][1]["conversation_id"]
+    # another user cannot delete it, and cannot tell it exists
+    assert client.delete(f"/api/conversations/{conv_id}", headers=auth(USER_B)).status_code == 404
+    assert client.get(f"/api/conversations/{conv_id}", headers=auth()).status_code == 200
+    assert client.delete(f"/api/conversations/{conv_id}", headers=auth()).json() == {"ok": True}
+    assert client.get(f"/api/conversations/{conv_id}", headers=auth()).status_code == 404
+    assert [c["id"] for c in client.get("/api/conversations", headers=auth()).json()] == [other]
+    assert client.delete(f"/api/conversations/{conv_id}", headers=auth()).status_code == 404
+    assert client.get(f"/api/conversations/{other}", headers=auth()).status_code == 200
+    assert client.delete(f"/api/conversations/{conv_id}").status_code == 401
