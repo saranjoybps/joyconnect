@@ -409,6 +409,15 @@ provider credentials live in env (except optional `PLATFORM_*` defaults).
 6. When you need real credentials (Google, Slack, Notion, GitHub apps), stop, list exactly what to create and which redirect URI and scopes to use, and continue with mocked tests meanwhile.
 7. Prefer small, typed, boring code. No new dependencies without a one-line reason in the commit message.
 8. Maintain `README.md` with: local setup, how to create each provider app (redirect URI, scopes), how to run tests, and how to add a new connector in under 10 steps.
+9. **No paid external API calls without approval (permanent rule).** Never call the OpenAI API, or any other
+   paid external API, for testing, debugging or verification without the user's explicit approval in the chat
+   first.
+   - Tests must mock or stub the LLM: fake clients and recorded fixtures only (see `FakeLLM` in
+     `apps/api/tests/test_agent.py`).
+   - Do not run app flows that trigger real OpenAI calls (chat, agent runs, evals) unless the user says
+     "approved".
+   - If a real call seems necessary, stop, explain why, estimate the cost, and wait for approval.
+   - Never read or print `OPENAI_API_KEY` (or any other secret from `.env`).
 
 ## 16. Commands (create these scripts)
 
