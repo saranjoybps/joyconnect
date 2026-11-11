@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     notion_version: str = "2026-03-11"
     github_app_client_id: str = ""
     github_app_client_secret: str = ""
+    github_app_slug: str = ""
     meta_app_id: str = ""
     meta_app_secret: str = ""
     meta_graph_version: str = ""

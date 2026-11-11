@@ -1,0 +1,136 @@
+"""GitHub App (user access tokens). Permissions live on the App, not in scopes."""
+
+from __future__ import annotations
+
+import re
+
+import httpx
+
+from app.connectors.base import (
+    ConnectorManifest, TokenSet, ToolContext, ToolDef, ToolError, object_schema, raise_for_status,
+)
+
+API = "https://api.github.com"
+REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+
+
+def _h(token: TokenSet) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token.access_token}", "Accept": "application/vnd.github+json"}
+
+
+def _repo(repo: str) -> str:
+    repo = repo.strip().removeprefix("https://github.com/").rstrip("/")
+    if not REPO_RE.match(repo):
+        raise ToolError("repo must look like 'owner/name'")
+    return repo
+
+
+async def account_label(http: httpx.AsyncClient, token: TokenSet, settings) -> str | None:
+    resp = await http.get(f"{API}/user", headers=_h(token))
+    raise_for_status(resp, "GitHub /user")
+    return resp.json().get("login")
+
+
+async def revoke(http: httpx.AsyncClient, m: ConnectorManifest, token: TokenSet, settings) -> None:
+    await http.request(
+        "DELETE",
+        f"{API}/applications/{settings.github_app_client_id}/token",
+        json={"access_token": token.access_token},
+        auth=httpx.BasicAuth(settings.github_app_client_id, settings.github_app_client_secret),
+        headers={"Accept": "application/vnd.github+json"},
+    )
+
+
+async def list_repos(ctx: ToolContext) -> dict:
+    h = _h(ctx.token)
+    inst = await ctx.http.get(f"{API}/user/installations", headers=h, params={"per_page": 100})
+    raise_for_status(inst, "Listing GitHub App installations")
+    repos: list[dict] = []
+    for i in inst.json().get("installations", []):
+        resp = await ctx.http.get(f"{API}/user/installations/{i['id']}/repositories", headers=h,
+                                  params={"per_page": 100})
+        raise_for_status(resp, "Listing repositories")
+        repos += [{"full_name": r["full_name"], "private": r.get("private"), "url": r.get("html_url")}
+                  for r in resp.json().get("repositories", [])]
+    out: dict = {"repos": repos}
+    if not repos:
+        out["hint"] = "The GitHub App is not installed on any repository yet. Install it from the Connections page."
+    return out
+
+
+async def list_issues(ctx: ToolContext, repo: str, state: str | None) -> dict:
+    resp = await ctx.http.get(f"{API}/repos/{_repo(repo)}/issues", headers=_h(ctx.token),
+                              params={"state": state or "open", "per_page": 30})
+    raise_for_status(resp, "Listing issues")
+    return {"issues": [
+        {"number": i["number"], "title": i["title"], "state": i["state"], "url": i.get("html_url"),
+         "user": (i.get("user") or {}).get("login"), "labels": [lb.get("name") for lb in i.get("labels", [])]}
+        for i in resp.json() if "pull_request" not in i
+    ]}
+
+
+async def create_issue(ctx: ToolContext, repo: str, title: str, body: str) -> dict:
+    resp = await ctx.http.post(f"{API}/repos/{_repo(repo)}/issues", headers=_h(ctx.token),
+                               json={"title": title, "body": body})
+    raise_for_status(resp, "Creating the issue")
+    i = resp.json()
+    return {"number": i["number"], "url": i.get("html_url")}
+
+
+async def comment_on_issue(ctx: ToolContext, repo: str, number: int, body: str) -> dict:
+    resp = await ctx.http.post(f"{API}/repos/{_repo(repo)}/issues/{int(number)}/comments",
+                               headers=_h(ctx.token), json={"body": body})
+    raise_for_status(resp, "Commenting on the issue")
+    return {"id": resp.json().get("id"), "url": resp.json().get("html_url")}
+
+
+REPO = {"type": "string", "description": "Repository as 'owner/name'."}
+
+MANIFEST = ConnectorManifest(
+    id="github",
+    name="GitHub",
+    icon="/icons/github.svg",
+    description="List repos and issues, open issues and comment, on repos where the app is installed.",
+    auth_type="oauth2",
+    authorize_url="https://github.com/login/oauth/authorize",
+    token_url="https://github.com/login/oauth/access_token",
+    scopes=[],
+    token_auth_style="body",
+    pkce=True,
+    client_id_setting="github_app_client_id",
+    client_secret_setting="github_app_client_secret",
+    reauth_errors=frozenset({"invalid_grant", "bad_refresh_token", "bad_verification_code"}),
+    setup_url="https://github.com/apps/{github_app_slug}/installations/new",
+    account_label=account_label,
+    revoke=revoke,
+    tools=[
+        ToolDef(
+            name="github__list_repos",
+            description="List repositories the GitHub App can access for this user.",
+            parameters=object_schema({}),
+            risk="read", handler=list_repos,
+        ),
+        ToolDef(
+            name="github__list_issues",
+            description="List issues (not pull requests) in a repository.",
+            parameters=object_schema({
+                "repo": REPO,
+                "state": {"type": ["string", "null"], "enum": ["open", "closed", "all", None],
+                          "description": "Issue state filter; null means open."},
+            }),
+            risk="read", handler=list_issues,
+        ),
+        ToolDef(
+            name="github__create_issue",
+            description="Open a new issue in a repository.",
+            parameters=object_schema({"repo": REPO, "title": {"type": "string"}, "body": {"type": "string"}}),
+            risk="write", handler=create_issue,
+        ),
+        ToolDef(
+            name="github__comment_on_issue",
+            description="Add a comment to an existing issue or pull request.",
+            parameters=object_schema({"repo": REPO, "number": {"type": "integer"}, "body": {"type": "string"}}),
+            risk="write", handler=comment_on_issue,
+        ),
+    ],
+)

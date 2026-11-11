@@ -10,7 +10,8 @@ from app.core.config import Settings, get_settings
 from app.core.logging import setup_logging
 from app.core.secrets import SecretStore, build_secret_store
 from app.db.client import Database, SupabaseRestDatabase
-from app.routers import health
+from app.oauth import router as oauth_router
+from app.routers import connections, health
 
 
 def create_app(
@@ -47,6 +48,8 @@ def create_app(
     if settings is not get_settings():
         app.dependency_overrides[get_settings] = lambda: settings
     app.include_router(health.router)
+    app.include_router(connections.router)
+    app.include_router(oauth_router.router)
     return app
 
 

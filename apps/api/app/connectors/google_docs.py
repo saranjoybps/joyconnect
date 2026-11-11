@@ -1,0 +1,87 @@
+from __future__ import annotations
+
+from app.connectors._google import google_manifest, parse_google_file_id
+from app.connectors.base import ToolContext, ToolDef, ToolError, object_schema, raise_for_status
+
+API = "https://docs.googleapis.com/v1/documents"
+MAX_CHARS = 20_000
+
+DOCUMENT_ID = {"type": "string", "description": "Document ID or full Google Docs URL pasted by the user."}
+
+
+def _did(value: str) -> str:
+    try:
+        return parse_google_file_id(value)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+async def _insert_at_end(ctx: ToolContext, document_id: str, text: str) -> None:
+    resp = await ctx.http.post(
+        f"{API}/{document_id}:batchUpdate",
+        json={"requests": [{"insertText": {"text": text, "endOfSegmentLocation": {}}}]},
+        headers=ctx.bearer,
+    )
+    raise_for_status(resp, "Writing to the document")
+
+
+async def create_document(ctx: ToolContext, title: str, content: str | None) -> dict:
+    resp = await ctx.http.post(API, json={"title": title}, headers=ctx.bearer)
+    raise_for_status(resp, "Creating the document")
+    doc_id = resp.json()["documentId"]
+    if content:
+        await _insert_at_end(ctx, doc_id, content)
+    return {"document_id": doc_id, "url": f"https://docs.google.com/document/d/{doc_id}/edit"}
+
+
+def _plain_text(doc: dict) -> str:
+    out: list[str] = []
+    for block in doc.get("body", {}).get("content", []):
+        for el in block.get("paragraph", {}).get("elements", []):
+            out.append(el.get("textRun", {}).get("content", ""))
+    return "".join(out)
+
+
+async def get_document(ctx: ToolContext, document_id: str) -> dict:
+    resp = await ctx.http.get(f"{API}/{_did(document_id)}", headers=ctx.bearer)
+    raise_for_status(resp, "Reading the document")
+    doc = resp.json()
+    text = _plain_text(doc)
+    return {"title": doc.get("title"), "text": text[:MAX_CHARS], "truncated": len(text) > MAX_CHARS}
+
+
+async def append_text(ctx: ToolContext, document_id: str, text: str) -> dict:
+    did = _did(document_id)
+    await _insert_at_end(ctx, did, text if text.startswith("\n") else f"\n{text}")
+    return {"document_id": did, "appended_chars": len(text)}
+
+
+MANIFEST = google_manifest(
+    id="google_docs",
+    name="Google Docs",
+    description="Create documents and read or append to docs you share by link or ID.",
+    scopes=["https://www.googleapis.com/auth/documents"],
+    tools=[
+        ToolDef(
+            name="google_docs__create_document",
+            description="Create a new Google Doc with a title and optional starting text.",
+            parameters=object_schema({
+                "title": {"type": "string"},
+                "content": {"type": ["string", "null"], "description": "Initial body text, or null."},
+            }),
+            risk="write", handler=create_document,
+        ),
+        ToolDef(
+            name="google_docs__get_document",
+            description="Read the title and plain text of a Google Doc.",
+            parameters=object_schema({"document_id": DOCUMENT_ID}),
+            risk="read", handler=get_document,
+        ),
+        ToolDef(
+            name="google_docs__append_text",
+            description="Append text as a new paragraph at the end of a Google Doc.",
+            parameters=object_schema({"document_id": DOCUMENT_ID, "text": {"type": "string"}}),
+            risk="write", handler=append_text,
+        ),
+    ],
+)
