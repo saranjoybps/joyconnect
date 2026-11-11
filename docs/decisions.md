@@ -160,3 +160,26 @@ Docs used: developers.google.com/workspace/{gmail,drive,slides,forms,tasks,peopl
 
 Not verified from the docs available: the sensitivity classification of the Forms, Tasks, Contacts and Meet
 scopes. Check them under Google Auth Platform > Data access before going beyond test users.
+
+
+## Token-based connectors (2026-11-11)
+
+Docs: airtable.com/developers/web/api, developer.atlassian.com/cloud/trello/rest, linear.app/developers/graphql,
+developers.asana.com/docs, docs.stripe.com/api. Auth is each provider's own documented static credential,
+entered on the Set up form and stored encrypted (`provider_apps`); nothing in env.
+
+| Connector | Auth | Tools | Notes / skipped |
+| --- | --- | --- | --- |
+| Airtable | PAT, Bearer | list bases, list records, create record | 5 req/s per base; one record per create. Update/delete skipped (not needed for the easy tier). |
+| Trello | key + token query params | boards, lists, cards, create card | 300/10 s per key. |
+| Linear | personal key, `Authorization: <key>` | teams, issues, create issue | **Skipped: comment and issue update** (mutation shapes not confirmed from the docs). Errors arrive as HTTP 200/400 with `errors`. |
+| Asana | PAT, Bearer | workspaces, projects, tasks, create task | 429 + Retry-After. |
+| Stripe | restricted key, Bearer | balance, customers, invoices | Read-only (GET only); publishable keys refused. |
+
+**Skipped: HubSpot.** The docs do not give a clear static-credential path: legacy private apps are being
+discontinued, the API is date-versioned and the scope names for CRM objects were not confirmed. It needs a
+public-app OAuth flow, which is not the "easy tier"; decide before building.
+
+**Granted-scopes check / Partial access badge:** not applicable. These providers expose no way to read a
+token's permissions, so scopes are not tracked (`scopes=[]`) and a lack of permission surfaces as the provider's
+401/403 text. Google connectors keep the full check.

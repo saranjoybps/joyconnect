@@ -187,6 +187,20 @@ card shows "Partial access".
    the secret, and the app slug (from `github.com/apps/<slug>`).
 5. After connecting, use **Choose repositories** on the card to install the app on repos.
 
+### Token-based connectors (Airtable, Trello, Linear, Asana, Stripe)
+No OAuth app and no env vars: open the card, paste the credential, Save, Test, Connect.
+
+| Connector | Credential | Permissions to grant |
+| --- | --- | --- |
+| Airtable | Personal access token (builder hub) | `schema.bases:read`, `data.records:read`, `data.records:write`, plus the bases to use |
+| Trello | API key + token (Power-Up admin) | token with read and write |
+| Linear | Personal API key (Settings > Security & access) | key (sent without a Bearer prefix) |
+| Asana | Personal access token (Developer apps) | token |
+| Stripe | Restricted key `rk_...` | Read on Balance, Customers, Invoices only (read-only tools; use test mode first) |
+
+These providers do not tell us what a token may do, so there is no "Partial access" badge for them: a
+permission problem shows up as the provider's 401/403 message in the chat.
+
 ### Optional: platform defaults
 An operator can provide a shared app for all users by setting `PLATFORM_<APP>_<FIELD>` in the root
 `.env` (see `.env.example`). Users who enter their own app always use theirs.
