@@ -64,7 +64,7 @@ def test_google_authorize_url(client, db):
     assert f"{url.scheme}://{url.netloc}{url.path}" == "https://accounts.google.com/o/oauth2/v2/auth"
     assert q["access_type"] == "offline" and q["prompt"] == "consent" and q["include_granted_scopes"] == "true"
     assert q["scope"].split(" ") == ["openid", "email", "https://www.googleapis.com/auth/spreadsheets"]
-    assert q["redirect_uri"] == "http://localhost:8000/api/oauth/callback/google_sheets"
+    assert q["redirect_uri"] == "http://localhost:8000/api/oauth/callback/google"
     assert q["code_challenge_method"] == "S256" and q["code_challenge"]
     row = db.tables["oauth_states"][0]
     assert row["state"] == q["state"] and row["user_id"] == USER_A and row["code_verifier"]

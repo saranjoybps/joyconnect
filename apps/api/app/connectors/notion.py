@@ -161,6 +161,9 @@ MANIFEST = ConnectorManifest(
         id_pattern=r"[0-9a-fA-F-]{32,36}", id_hint="Notion client IDs are UUIDs",
     ),
     console_url="https://www.notion.so/profile/integrations",
+    localhost_redirect="unverified",
+    redirect_note="Notion's docs do not say whether http://localhost is accepted. Try localhost first; "
+                  "if Notion rejects the redirect URI, use the public HTTPS tunnel.",
     setup_guide=[
         "Create a new integration at notion.so/profile/integrations and make it Public.",
         "Add the redirect URI below.",

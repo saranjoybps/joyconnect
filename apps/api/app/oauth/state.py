@@ -1,6 +1,6 @@
 """Signed, single-use OAuth state and PKCE helpers.
 
-The state carries (user id, provider, provider_app ref, nonce, issued-at) and an HMAC.
+The state carries (user id, connector id, provider_app ref, nonce, issued-at) and an HMAC.
 The app ref ties the callback (and every later refresh) to the app that started the flow.
 Single use and the 10 minute limit are enforced against the oauth_states
 row, which also holds the PKCE verifier (the verifier never leaves the server).
@@ -45,7 +45,7 @@ def sign_state(secret: str, user_id: str, provider: str, app_ref: str = "platfor
     return f"{body}.{sig}"
 
 
-def verify_state(secret: str, state: str, provider: str, now: float | None = None) -> dict:
+def verify_state(secret: str, state: str, provider: str | None = None, now: float | None = None) -> dict:
     try:
         body, sig = state.split(".")
     except ValueError as exc:
@@ -54,7 +54,7 @@ def verify_state(secret: str, state: str, provider: str, now: float | None = Non
     if not hmac.compare_digest(sig, expected):
         raise StateError("bad state signature")
     payload = json.loads(_unb64(body))
-    if payload.get("p") != provider:
+    if provider is not None and payload.get("p") != provider:
         raise StateError("state provider mismatch")
     if (now or time.time()) - payload.get("t", 0) > STATE_TTL_SECONDS:
         raise StateError("state expired")

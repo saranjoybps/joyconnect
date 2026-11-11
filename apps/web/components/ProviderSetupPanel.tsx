@@ -75,6 +75,18 @@ export function ProviderSetupPanel({ connector, onSaved, onRemoved, onClose }: P
     }
   }
 
+  async function acknowledge() {
+    setBusy(true);
+    try {
+      await providerAppsApi.ackRedirectUri(connector.app_provider);
+      onSaved();
+    } catch (err) {
+      setMessage({ ok: false, text: (err as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function remove(confirm: boolean) {
     setBusy(true);
     setMessage(null);
@@ -122,10 +134,38 @@ export function ProviderSetupPanel({ connector, onSaved, onRemoved, onClose }: P
         </a>
       )}
 
-      {connector.redirect_uris.length > 0 && (
+      {hasUserApp && setup.redirect_uri_changed && connector.redirect_uri && (
+        <div role="alert" className="space-y-2 rounded-md bg-amber-50 p-2 text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
+          <p>
+            The redirect URI changed since you saved this app. Update it in the provider console to
+            the one below, or connecting will fail with a redirect URI mismatch.
+          </p>
+          {setup.registered_redirect_uri && (
+            <p className="text-xs">Previously: <code className="break-all">{setup.registered_redirect_uri}</code></p>
+          )}
+          <button type="button" onClick={acknowledge} disabled={busy} className="rounded border border-amber-700 px-2 py-1 text-xs font-medium">
+            I&apos;ve updated it
+          </button>
+        </div>
+      )}
+      {connector.redirect_uri && (
         <div className="space-y-1">
-          <p className="font-medium">Redirect URI{connector.redirect_uris.length > 1 ? "s (add all)" : ""}</p>
-          {connector.redirect_uris.map((u) => <CopyField key={u} value={u} />)}
+          <p className="font-medium">Redirect URI</p>
+          <CopyField value={connector.redirect_uri} />
+          <p className="text-xs text-neutral-600 dark:text-neutral-400">
+            {connector.redirect_info.mode === "tunnel"
+              ? "public HTTPS tunnel"
+              : "localhost (works for Google and GitHub in dev)"}
+          </p>
+          {connector.redirect_info.note && (
+            <p className="text-xs text-neutral-600 dark:text-neutral-400">{connector.redirect_info.note}</p>
+          )}
+          {connector.redirect_info.mode === "localhost" && connector.redirect_info.localhost_redirect === "no" && (
+            <p role="note" className="text-xs font-medium text-amber-800 dark:text-amber-300">
+              {connector.name} will not accept this localhost URI. Run the tunnel (scripts/dev-tunnel) and
+              register the HTTPS URI it prints.
+            </p>
+          )}
         </div>
       )}
       {connector.scopes.length > 0 && (

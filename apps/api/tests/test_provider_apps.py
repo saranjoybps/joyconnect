@@ -48,7 +48,7 @@ def test_save_masks_and_never_returns_secret(client, db, no_platform):
     gh = next(c for c in r3.json() if c["id"] == "github")
     assert gh["configured"] is True
     assert gh["setup_url"] == "https://github.com/apps/my-connect/installations/new"
-    assert gh["redirect_uris"] == ["http://localhost:8000/api/oauth/callback/github"]
+    assert gh["redirect_uri"] == "http://localhost:8000/api/oauth/callback/github"
     assert [f["key"] for f in gh["credential_fields"]] == ["client_id", "client_secret", "app_slug"]
     assert SECRET not in all_text(r1, r2, r3) and GH_ID not in all_text(r1, r2, r3)
 
@@ -62,7 +62,7 @@ def test_google_app_is_shared_by_sheets_docs_calendar(client, no_platform):
     catalog = {c["id"]: c for c in client.get("/api/connectors", headers=auth()).json()}
     for cid in ("google_sheets", "google_docs", "google_calendar"):
         assert catalog[cid]["configured"] and catalog[cid]["app_provider"] == "google"
-    assert len(catalog["google_docs"]["redirect_uris"]) == 3
+    assert catalog["google_docs"]["redirect_uri"] == "http://localhost:8000/api/oauth/callback/google"
     assert catalog["slack"]["configured"] is False
 
 

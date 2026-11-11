@@ -18,7 +18,7 @@ def build_authorize_url(m: ConnectorManifest, settings: Settings, app: ResolvedA
     client_id, _ = m.client_credentials(app)
     params: dict[str, str] = {
         "client_id": client_id,
-        "redirect_uri": settings.redirect_uri(m.id),
+        "redirect_uri": settings.redirect_uri(m.credentials_key),
         "response_type": "code",
         "state": state,
     }
@@ -62,8 +62,10 @@ async def _token_request(http: httpx.AsyncClient, m: ConnectorManifest, app: Res
 
 
 async def exchange_code(http: httpx.AsyncClient, m: ConnectorManifest, settings: Settings, app: ResolvedApp,
-                        code: str, verifier: str | None) -> TokenSet:
-    data = {"grant_type": "authorization_code", "code": code, "redirect_uri": settings.redirect_uri(m.id)}
+                        code: str, verifier: str | None, redirect_uri: str | None = None) -> TokenSet:
+    # redirect_uri must equal the one sent to /authorize; the callback passes the route it was hit on.
+    data = {"grant_type": "authorization_code", "code": code,
+            "redirect_uri": redirect_uri or settings.redirect_uri(m.credentials_key)}
     if m.pkce and verifier:
         data["code_verifier"] = verifier
     return await _token_request(http, m, app, data)
@@ -96,7 +98,7 @@ async def probe_client_credentials(http: httpx.AsyncClient, m: ConnectorManifest
     (invalid_grant and friends) when the client id/secret are right, and rejects
     the *client* (invalid_client and friends) when they are wrong."""
     data = {"grant_type": "authorization_code", "code": "connect-credential-check",
-            "redirect_uri": settings.redirect_uri(m.id)}
+            "redirect_uri": settings.redirect_uri(m.credentials_key)}
     try:
         status, body = await _post_token(http, m, app, data)
     except OAuthError:

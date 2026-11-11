@@ -54,6 +54,59 @@ cd apps/web && npm test && npm run typecheck
 - Policy: read tools run immediately; write tools ask unless the connection has *Auto-approve writes*;
   destructive tools always ask. Every call is audited in `tool_runs` (arguments redacted).
 
+## Local OAuth setup
+
+Two URLs, two jobs:
+
+| Variable | Used for | Default |
+|---|---|---|
+| `API_BASE_URL` | the browser calling the API (chat, **SSE**, connections) | `http://localhost:8000` |
+| `PUBLIC_API_BASE_URL` | the redirect URIs providers send users back to | `API_BASE_URL` |
+
+Every redirect URI (shown in the Set up panel, sent to `/authorize`, used for the token exchange) is
+`{PUBLIC_API_BASE_URL}/api/oauth/callback/{family}`; the web app never builds one itself.
+
+**What each provider accepts (checked against their docs):**
+
+| Provider | `http://localhost` redirect | Local setup |
+|---|---|---|
+| Google (Sheets, Docs, Calendar) | Yes (Google's redirect URI rules exempt localhost) | localhost |
+| Slack | **No**: "A Redirect URL must also use HTTPS" | tunnel |
+| Notion | Not stated in Notion's docs (third-party guides say it works) | try localhost, tunnel if rejected |
+| GitHub App | Not stated in GitHub's docs (its tutorials use localhost) | try localhost, tunnel if rejected |
+| Meta (Phase 4) | HTTPS enforced by default; a localhost exemption in dev mode is only documented in a 2018 announcement | tunnel |
+
+**Localhost (default).** Nothing to do. Register `http://localhost:8000/api/oauth/callback/google` (and the
+`github` / `notion` ones) in the provider console.
+
+**Quick tunnel (optional, off by default).** Install `cloudflared` yourself (`brew install cloudflared`,
+`winget install --id Cloudflare.cloudflared`, or https://pkg.cloudflare.com/ on Linux; the script never
+installs anything), then in a separate terminal:
+
+```
+scripts/dev-tunnel.sh          # Windows: .\scripts\dev-tunnel.ps1
+```
+
+It runs `cloudflared tunnel --url http://localhost:8000`, finds the `https://<random>.trycloudflare.com` URL,
+writes `PUBLIC_API_BASE_URL=...` to `apps/api/.env.local` (git-ignored; restart the API unless it runs with
+`--reload`), prints the redirect URIs to register, and removes the line again when you press Ctrl+C. The URL
+changes on every run, so after restarting it update the redirect URI in each provider console. The Set up
+panel shows an amber banner ("redirect URI changed") until you click "I've updated it".
+
+**Named tunnel (stable hostname).** Once: `cloudflared tunnel login`, `cloudflared tunnel create connect-dev`,
+`cloudflared tunnel route dns connect-dev api.example.com`, and point it at `http://localhost:8000` in
+`~/.cloudflared/config.yml`. Then:
+
+```
+TUNNEL_HOSTNAME=api.example.com TUNNEL_NAME=connect-dev scripts/dev-tunnel.sh
+```
+
+This runs `cloudflared tunnel run connect-dev` and sets `PUBLIC_API_BASE_URL=https://api.example.com`.
+
+**SSE note.** Quick tunnels do not support Server-Sent Events, so only the OAuth callback goes through the
+tunnel. The browser keeps calling `http://localhost:8000` for chat (`NEXT_PUBLIC_API_BASE_URL`); after the
+callback the API redirects the browser back to `WEB_BASE_URL` (localhost), so nothing else changes.
+
 ## Provider apps: each user brings their own
 
 Provider credentials are **not** server config. Each user creates an app in the provider's developer
@@ -69,8 +122,10 @@ redirect URI to copy, the scopes, and a short guide. Flow: **Set up → Save →
   `PLATFORM_GOOGLE_CLIENT_ID`) → "set up required".
 - A connection keeps using the app it was made with for refresh and revoke.
 
-Redirect URI pattern: **`{API_BASE_URL}/api/oauth/callback/{connector_id}`**
-(locally `http://localhost:8000/api/oauth/callback/<id>`).
+Redirect URI pattern (one per provider family, built from `PUBLIC_API_BASE_URL`):
+**`{PUBLIC_API_BASE_URL}/api/oauth/callback/{family}`** with family `google`, `slack`, `notion`, `github`
+(later `meta`). The Set up panel shows the exact URI for your setup. See "Local OAuth setup" below for
+localhost vs the HTTPS tunnel.
 
 ### Google (one app for Sheets, Docs and Calendar)
 1. https://console.cloud.google.com → create a project → APIs & Services → enable **Google Sheets API**,
@@ -79,25 +134,25 @@ Redirect URI pattern: **`{API_BASE_URL}/api/oauth/callback/{connector_id}`**
 3. Data access → add scopes `openid`, `.../auth/userinfo.email`, `.../auth/spreadsheets`,
    `.../auth/documents`, `.../auth/calendar.events` (sensitive, not restricted; verification only needed
    beyond test users).
-4. Clients → Create client → **Web application** → Authorized redirect URIs (all three):
-   `http://localhost:8000/api/oauth/callback/google_sheets`, `.../google_docs`, `.../google_calendar`.
+4. Clients → Create client → **Web application** → Authorized redirect URI (one, shared by Sheets, Docs
+   and Calendar): `http://localhost:8000/api/oauth/callback/google`.
 5. Paste the client ID (`…apps.googleusercontent.com`) and secret (`GOCSPX-…`) into any Google card's Set up.
 
 ### Slack
 1. https://api.slack.com/apps → Create New App → From scratch → pick your workspace.
-2. OAuth & Permissions → Redirect URLs: `{API_BASE_URL}/api/oauth/callback/slack`. Slack requires
-   HTTPS, so for local use run a tunnel (`ngrok http 8000`) and set `API_BASE_URL` to the tunnel URL.
+2. OAuth & Permissions → Redirect URLs: `{PUBLIC_API_BASE_URL}/api/oauth/callback/slack`. Slack requires
+   HTTPS, so for local use start the tunnel (`scripts/dev-tunnel.sh`) and register the HTTPS URI it prints.
 3. Bot Token Scopes: `chat:write`, `channels:read`, `users:read`. Leave token rotation off.
 4. Basic Information → App Credentials → paste Client ID and Client Secret into Slack's Set up.
 
 ### Notion
 1. https://www.notion.so/profile/integrations → New integration → type **Public**.
-2. Redirect URI: `http://localhost:8000/api/oauth/callback/notion`. Capabilities: Read, Insert, Update content.
+2. Redirect URI: `http://localhost:8000/api/oauth/callback/notion` (use the tunnel URI if Notion rejects localhost). Capabilities: Read, Insert, Update content.
 3. Paste the OAuth client ID and secret into Notion's Set up. When connecting, pick the pages to share.
 
 ### GitHub (a GitHub App, not an OAuth App)
 1. GitHub → Settings → Developer settings → GitHub Apps → New GitHub App.
-2. Callback URL: `http://localhost:8000/api/oauth/callback/github`. Tick **Expire user authorization
+2. Callback URL: `http://localhost:8000/api/oauth/callback/github` (use the tunnel URI if GitHub rejects localhost). Tick **Expire user authorization
    tokens**; leave "Request user authorization during installation" off; Webhook inactive.
 3. Repository permissions: Issues **Read & write**; Pull requests, Contents, Metadata **Read**.
 4. Generate a client secret. In GitHub's Set up paste the **Client ID** (starts with `Iv`, not the App ID),

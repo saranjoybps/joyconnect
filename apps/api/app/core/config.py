@@ -2,22 +2,27 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+API_ROOT = Path(__file__).resolve().parents[2]
+# Later files win. apps/api/.env.local is written by scripts/dev-tunnel.* (PUBLIC_API_BASE_URL).
+_ENV_FILES = (REPO_ROOT / ".env", API_ROOT / ".env", API_ROOT / ".env.local")
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(REPO_ROOT / ".env", Path(__file__).resolve().parents[2] / ".env"),
+        env_file=_ENV_FILES,
         extra="ignore",
     )
 
     app_env: str = "local"
     web_base_url: str = "http://localhost:3000"
-    api_base_url: str = "http://localhost:8000"
+    api_base_url: str = "http://localhost:8000"      # what the browser calls (chat, SSE)
+    public_api_base_url: str = ""                    # what providers redirect to; defaults to api_base_url
 
     supabase_url: str = ""
     supabase_anon_key: str = ""
@@ -55,8 +60,19 @@ class Settings(BaseSettings):
             return ""
         return os.environ.get(name) or _env_file_values().get(name) or ""
 
-    def redirect_uri(self, provider_id: str) -> str:
-        return f"{self.api_base_url.rstrip('/')}/api/oauth/callback/{provider_id}"
+    @property
+    def oauth_base_url(self) -> str:
+        """Base of every redirect URI. PUBLIC_API_BASE_URL, never API_BASE_URL, unless unset."""
+        return (self.public_api_base_url or self.api_base_url).rstrip("/")
+
+    def redirect_uri(self, family: str) -> str:
+        """One URI per provider family (a connector's `credentials_key`, e.g. 'google', 'slack')."""
+        return f"{self.oauth_base_url}/api/oauth/callback/{family}"
+
+    @property
+    def redirect_mode(self) -> Literal["localhost", "tunnel"]:
+        host = (urlparse(self.oauth_base_url).hostname or "").lower()
+        return "localhost" if host in {"localhost", "127.0.0.1", "::1"} else "tunnel"
 
 
 @lru_cache
@@ -64,7 +80,7 @@ def _env_file_values() -> dict[str, str]:
     from dotenv import dotenv_values
 
     out: dict[str, str] = {}
-    for path in (REPO_ROOT / ".env", Path(__file__).resolve().parents[2] / ".env"):
+    for path in _ENV_FILES:
         if path.exists():
             out.update({k: v for k, v in dotenv_values(path).items() if v})
     return out

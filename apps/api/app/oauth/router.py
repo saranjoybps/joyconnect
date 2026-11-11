@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 
 from app.connectors.base import OAuthError, SetupRequired, ToolError
-from app.connectors.registry import get_manifest
+from app.connectors.registry import all_manifests, get_manifest
 from app.core.config import Settings, get_settings
 from app.core.security import UserDep
 from app.deps import DbDep, HttpDep, StoreDep
@@ -68,6 +68,13 @@ def _back_to_web(settings: Settings, **params: str) -> RedirectResponse:
     return RedirectResponse(f"{settings.web_base_url.rstrip('/')}/connections?{urlencode(params)}", status_code=303)
 
 
+def _callback_names() -> set[str]:
+    """Route names that accept a callback: every provider family (the URI we hand to providers)
+    plus every legacy per-connector id (older registrations and flows already in flight)."""
+    ms = [m for m in all_manifests().values() if m.auth_type == "oauth2"]
+    return {m.id for m in ms} | {m.credentials_key for m in ms}
+
+
 @router.get("/oauth/callback/{provider}")
 async def callback(
     provider: str,
@@ -79,42 +86,49 @@ async def callback(
     state: Annotated[str | None, Query()] = None,
     error: Annotated[str | None, Query()] = None,
 ) -> RedirectResponse:
-    m = get_manifest(provider)
-    if m is None or m.auth_type != "oauth2":
+    # `provider` is the route the provider called: a family ('google') or a legacy connector id.
+    # The connector that started the flow is in the signed state.
+    if provider not in _callback_names():
         raise HTTPException(404, "unknown provider")
     if not state:
         return _back_to_web(settings, error="invalid_state", provider=provider)
 
     try:
-        payload = verify_state(settings.oauth_state_secret, state, provider)
+        payload = verify_state(settings.oauth_state_secret, state)
     except StateError:
         return _back_to_web(settings, error="invalid_state", provider=provider)
+    m = get_manifest(payload.get("p", ""))
+    if m is None or m.auth_type != "oauth2" or provider not in {m.id, m.credentials_key}:
+        return _back_to_web(settings, error="invalid_state", provider=provider)
+    connector = m.id
+
     # Single use: consume the row before anything else can fail.
     rows = await db.delete("oauth_states", {"state": state})
-    if not rows or rows[0]["user_id"] != payload["u"] or rows[0]["provider"] != provider:
-        return _back_to_web(settings, error="invalid_state", provider=provider)
+    if not rows or rows[0]["user_id"] != payload["u"] or rows[0]["provider"] != connector:
+        return _back_to_web(settings, error="invalid_state", provider=connector)
     created = datetime.fromisoformat(str(rows[0]["created_at"]).replace("Z", "+00:00"))
     if datetime.now(timezone.utc) - created > timedelta(seconds=STATE_TTL_SECONDS):
-        return _back_to_web(settings, error="invalid_state", provider=provider)
+        return _back_to_web(settings, error="invalid_state", provider=connector)
 
     if error or not code:
         # User denied consent, or provider error.
-        return _back_to_web(settings, error=error or "missing_code", provider=provider)
+        return _back_to_web(settings, error=error or "missing_code", provider=connector)
 
     user_id = payload["u"]
     try:
         app = await ProviderAppService(db, store, settings).by_ref(user_id, m, payload.get("a"))
     except SetupRequired:
-        return _back_to_web(settings, error="setup_required", provider=provider)
+        return _back_to_web(settings, error="setup_required", provider=connector)
     try:
-        token = await exchange_code(http, m, settings, app, code, rows[0].get("code_verifier"))
+        token = await exchange_code(http, m, settings, app, code, rows[0].get("code_verifier"),
+                                    redirect_uri=settings.redirect_uri(provider))
         label = await m.account_label(http, token, settings) if m.account_label else None
     except OAuthError as exc:
-        log.info("code exchange failed for %s: %s", provider, exc.code)
-        return _back_to_web(settings, error=exc.code, provider=provider)
+        log.info("code exchange failed for %s: %s", connector, exc.code)
+        return _back_to_web(settings, error=exc.code, provider=connector)
     except (ToolError, httpx.HTTPError) as exc:
-        log.warning("provider call failed during %s callback: %s", provider, type(exc).__name__)
-        return _back_to_web(settings, error="provider_unavailable", provider=provider)
+        log.warning("provider call failed during %s callback: %s", connector, type(exc).__name__)
+        return _back_to_web(settings, error="provider_unavailable", provider=connector)
 
     await TokenService(db, store, http, settings).save_connection(user_id, m, token, label, app)
-    return _back_to_web(settings, connected=provider)
+    return _back_to_web(settings, connected=connector)

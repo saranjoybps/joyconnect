@@ -81,6 +81,7 @@ def test_provider_apps_isolated_and_secret_columns_hidden(conn):
     for sql in ("select client_id from public.provider_apps",
                 "select secret_id from public.provider_apps",
                 "select extra from public.provider_apps",
+                "select redirect_uri from public.provider_apps",
                 "insert into public.provider_apps (user_id, provider) values (auth.uid(), 'x')",
                 "delete from public.provider_apps"):
         cur.execute("savepoint t")

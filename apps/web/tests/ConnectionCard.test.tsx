@@ -10,7 +10,7 @@ import { providerAppsApi, type Connection, type Connector, type SetupInfo } from
 
 const noSetup: SetupInfo = {
   provider: "github", source: "none", client_id_masked: null, fields: {}, secrets_set: [],
-  platform_available: false, created_at: null,
+  platform_available: false, created_at: null, redirect_uri_changed: false, registered_redirect_uri: null,
 };
 const userSetup: SetupInfo = {
   ...noSetup, source: "user", client_id_masked: "Iv23…3456", fields: { app_slug: "my-app" },
@@ -25,7 +25,8 @@ const base: Connector = {
     { key: "client_secret", label: "Client secret", secret: true, help_text: "Generate one", required: true, pattern_hint: "" },
     { key: "app_slug", label: "App slug", secret: false, help_text: "", required: false, pattern_hint: "" },
   ],
-  redirect_uris: ["http://localhost:8000/api/oauth/callback/github"],
+  redirect_uri: "http://localhost:8000/api/oauth/callback/github",
+  redirect_info: { mode: "localhost", localhost_redirect: "unverified", note: "GitHub docs do not state a localhost rule." },
   scopes: [], console_url: "https://github.com/settings/apps",
   setup_guide: ["Create a GitHub App"], setup_url: null,
   tools: [{ name: "github__create_issue", risk: "write" }],
@@ -102,6 +103,49 @@ describe("Set up panel", () => {
     expect(save).toHaveBeenCalledWith("github", { client_id: "Iv23abc", client_secret: "s3cret", app_slug: "" });
     expect(h.onSetupChanged).toHaveBeenCalled();
     expect(secret).toHaveValue(""); // secret cleared from the form after saving
+  });
+
+  it("shows exactly one redirect URI with a localhost status line and the provider note", async () => {
+    setup(base);
+    await userEvent.click(screen.getByRole("button", { name: "Set up" }));
+    expect(screen.getAllByText(/\/api\/oauth\/callback\//)).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
+    expect(screen.getByText("localhost (works for Google and GitHub in dev)")).toBeInTheDocument();
+    expect(screen.getByText(/do not state a localhost rule/)).toBeInTheDocument();
+  });
+
+  it("tunnel mode shows the HTTPS URI and the tunnel status line", async () => {
+    const uri = "https://quiet-words.trycloudflare.com/api/oauth/callback/slack";
+    setup({ ...base, id: "slack", name: "Slack", redirect_uri: uri,
+      redirect_info: { mode: "tunnel", localhost_redirect: "no", note: null } });
+    await userEvent.click(screen.getByRole("button", { name: "Set up" }));
+    expect(screen.getByText(uri)).toBeInTheDocument();
+    expect(screen.getByText("public HTTPS tunnel")).toBeInTheDocument();
+    expect(screen.queryByText(/will not accept this localhost URI/)).not.toBeInTheDocument();
+  });
+
+  it("warns when a provider that needs HTTPS is still on localhost", async () => {
+    setup({ ...base, id: "slack", name: "Slack", redirect_info: { mode: "localhost", localhost_redirect: "no", note: null } });
+    await userEvent.click(screen.getByRole("button", { name: "Set up" }));
+    expect(screen.getByText(/Slack will not accept this localhost URI/)).toBeInTheDocument();
+  });
+
+  it("shows a banner when the redirect URI changed after saving, and clears it on acknowledge", async () => {
+    const ack = vi.spyOn(providerAppsApi, "ackRedirectUri").mockResolvedValue(userSetup);
+    const changed: Connector = { ...ready, setup: { ...userSetup, redirect_uri_changed: true,
+      registered_redirect_uri: "http://localhost:8000/api/oauth/callback/github" } };
+    const h = setup(changed);
+    await userEvent.click(screen.getByRole("button", { name: "Edit setup" }));
+    expect(screen.getByText(/redirect URI changed since you saved/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /updated it/ }));
+    expect(ack).toHaveBeenCalledWith("github");
+    expect(h.onSetupChanged).toHaveBeenCalled();
+  });
+
+  it("no banner when the redirect URI is unchanged", async () => {
+    setup(ready);
+    await userEvent.click(screen.getByRole("button", { name: "Edit setup" }));
+    expect(screen.queryByText(/redirect URI changed/)).not.toBeInTheDocument();
   });
 
   it("shows field errors from the API", async () => {

@@ -53,7 +53,7 @@ SETUP_GUIDE = [
     "Create a Google Cloud project, then enable the Google Sheets, Docs and Calendar APIs.",
     "Google Auth Platform > Audience: choose External and add yourself as a test user.",
     "Data access: add the scopes listed below.",
-    "Clients > Create client > Web application, and add every redirect URI listed below.",
+    "Clients > Create client > Web application, and add the redirect URI listed below (one URI for Sheets, Docs and Calendar).",
     "Copy the client ID and secret here. One Google app serves Sheets, Docs and Calendar.",
 ]
 
@@ -75,6 +75,9 @@ def google_manifest(*, id: str, name: str, description: str, scopes: list[str], 
         app_provider="google",
         credential_fields=CREDENTIAL_FIELDS,
         console_url="https://console.cloud.google.com/auth/clients",
+        localhost_redirect="yes",
+        redirect_note="Google allows http://localhost redirect URIs for web application clients. "
+                      "All Google connectors share this one URI.",
         setup_guide=SETUP_GUIDE,
         account_label=google_account_label,
         revoke=google_revoke,

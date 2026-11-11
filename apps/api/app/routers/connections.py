@@ -51,7 +51,6 @@ async def list_connectors(user: UserDep, db: DbDep, store: StoreDep, settings: S
             public_values = {f.key: app.values.get(f.key, "") for f in m.credential_fields if not f.secret} if app else {}
         else:
             public_values = {}
-        group = [x.id for x in manifests if x.credentials_key == m.credentials_key and x.auth_type == "oauth2"]
         out.append({
             "id": m.id,
             "name": m.name,
@@ -62,7 +61,12 @@ async def list_connectors(user: UserDep, db: DbDep, store: StoreDep, settings: S
             "configured": setup["source"] != "none",
             "setup": setup,
             "credential_fields": [f.model_dump(exclude={"pattern"}) for f in m.credential_fields],
-            "redirect_uris": [settings.redirect_uri(cid) for cid in group],
+            "redirect_uri": settings.redirect_uri(m.credentials_key) if m.auth_type == "oauth2" else None,
+            "redirect_info": {
+                "mode": settings.redirect_mode,
+                "localhost_redirect": m.localhost_redirect,
+                "note": m.redirect_note,
+            },
             "scopes": m.scopes,
             "console_url": m.console_url,
             "setup_guide": m.setup_guide,

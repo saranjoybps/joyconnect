@@ -96,3 +96,24 @@ Each entry: what CLAUDE.md says, what the live docs say (checked 2026-11-11), wh
   `/api/connections/{provider}/start`, which validates them.
 - **Env.** `GOOGLE_CLIENT_ID`/`SLACK_CLIENT_ID`/... and `GITHUB_APP_SLUG` were removed. Optional
   `PLATFORM_<APP>_<FIELD>` defaults replace them (GitHub's slug became a form field).
+
+## Redirect URIs: one per provider family, from PUBLIC_API_BASE_URL
+
+- **PUBLIC_API_BASE_URL** (default `API_BASE_URL`) is the only base for redirect URIs; `API_BASE_URL` stays
+  what the browser calls. `apps/api/.env.local` is loaded after `.env` so `scripts/dev-tunnel.*` can set it.
+- **One URI per family** (`google`, `slack`, `notion`, `github`, later `meta`), keyed by the manifest's
+  `credentials_key`. The signed state already carried the connector id (`p`), so the callback resolves the
+  connector from the state and only checks that the route is that connector's id or family.
+- **Legacy routes** (`/callback/google_sheets`...) are kept and exchange the code with the redirect URI of
+  the route they were called on (it must equal the one sent to `/authorize`). Existing connections need no
+  change: refresh and revoke do not send a redirect URI.
+- **Changed-URI banner**: `provider_apps.redirect_uri` (migration 0005, not granted to clients) records the URI
+  at save time; the catalog reports `redirect_uri_changed` when it differs from the current one; the user
+  confirms via `POST /api/provider-apps/{provider}/redirect-uri/ack`. Rows saved before 0005 have no value and
+  are not flagged (Google users saved under the old per-connector URIs must register the new shared one).
+- **HTTPS vs localhost, checked 2026-11-11.** Slack docs: "The `redirect_uri` must use HTTPS" (localhost
+  not accepted). Google docs: localhost exempt from the HTTPS rule. Notion docs and GitHub docs say nothing
+  about localhost (third-party guides and GitHub's tutorials use it), so they are `unverified`: try localhost,
+  tunnel if rejected. Meta: "Enforce HTTPS" is on by default; localhost is only exempt in development mode per a
+  2018 announcement, no current doc found, so use the tunnel (VERIFY in the App Dashboard in Phase 4).
+- **Tunnel is optional and local-only**: quick tunnels do not carry SSE, so chat stays on `API_BASE_URL`.

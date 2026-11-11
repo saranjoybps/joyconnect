@@ -20,6 +20,16 @@ export type SetupInfo = {
   secrets_set: string[];
   platform_available: boolean;
   created_at: string | null;
+  /** The redirect URI changed (e.g. a tunnel started) since the user registered the app. */
+  redirect_uri_changed: boolean;
+  registered_redirect_uri: string | null;
+};
+
+/** How the redirect URI is reachable; built server-side from PUBLIC_API_BASE_URL. */
+export type RedirectInfo = {
+  mode: "localhost" | "tunnel";
+  localhost_redirect: "yes" | "no" | "unverified";
+  note: string | null;
 };
 
 export type Connector = {
@@ -32,7 +42,8 @@ export type Connector = {
   configured: boolean;
   setup: SetupInfo;
   credential_fields: CredentialField[];
-  redirect_uris: string[];
+  redirect_uri: string | null;
+  redirect_info: RedirectInfo;
   scopes: string[];
   console_url: string | null;
   setup_guide: string[];
@@ -66,7 +77,23 @@ export type StartResult = { authorize_url?: string; connected?: boolean };
 export type TestResult = { ok: boolean; source: string; message: string; errors: Record<string, string> };
 
 export const connectionsApi = {
-  connectors: () => apiFetch<Connector[]>("/api/connectors"),
+  connectors: async () => {
+    const list = await apiFetch<Connector[]>("/api/connectors");
+    // Tolerate an older API that predates provider setup info.
+    return list.map((c) => ({
+      ...c,
+      setup: c.setup ?? {
+        provider: c.app_provider ?? c.id, source: "none" as const, client_id_masked: null,
+        fields: {}, secrets_set: [], platform_available: false, created_at: null,
+        redirect_uri_changed: false, registered_redirect_uri: null,
+      },
+      redirect_uri: c.redirect_uri ?? null,
+      redirect_info: c.redirect_info ?? { mode: "localhost" as const, localhost_redirect: "unverified" as const, note: null },
+      credential_fields: c.credential_fields ?? [],
+      scopes: c.scopes ?? [],
+      setup_guide: c.setup_guide ?? [],
+    }));
+  },
   list: () => apiFetch<Connection[]>("/api/connections"),
   start: (provider: string) =>
     apiFetch<StartResult>(`/api/connections/${encodeURIComponent(provider)}/start`, { method: "POST" }),
@@ -84,6 +111,9 @@ export const providerAppsApi = {
       method: "POST",
       body: JSON.stringify({ values }),
     }),
+  /** The user updated the redirect URI in the provider console: clear the "changed" banner. */
+  ackRedirectUri: (provider: string) =>
+    apiFetch<SetupInfo>(`/api/provider-apps/${encodeURIComponent(provider)}/redirect-uri/ack`, { method: "POST" }),
   test: (provider: string) =>
     apiFetch<TestResult>(`/api/provider-apps/${encodeURIComponent(provider)}/test`, { method: "POST" }),
   remove: (provider: string, confirm: boolean) =>

@@ -56,6 +56,20 @@ async def save(provider: str, body: SaveBody, user: UserDep, db: DbDep, store: S
     return svc.public_view(row, m)
 
 
+@router.post("/{provider}/redirect-uri/ack")
+async def ack_redirect_uri(provider: str, user: UserDep, db: DbDep, store: StoreDep,
+                           settings: SettingsDep) -> dict:
+    """The user updated the redirect URI in the provider console: stop warning about the change."""
+    m = manifest_for(provider)
+    svc = ProviderAppService(db, store, settings)
+    row = await svc.get_row(user.id, m.credentials_key)
+    if row is None:
+        raise HTTPException(404, "no saved credentials")
+    rows = await db.update("provider_apps", {"id": row["id"]},
+                           {"redirect_uri": settings.redirect_uri(m.credentials_key)})
+    return svc.public_view(rows[0], m)
+
+
 @router.post("/{provider}/test")
 async def test(provider: str, user: UserDep, db: DbDep, store: StoreDep, http: HttpDep,
                settings: SettingsDep) -> dict[str, Any]:

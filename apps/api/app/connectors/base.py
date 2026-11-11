@@ -194,6 +194,10 @@ class ConnectorManifest(BaseModel):
     token_body_format: Literal["form", "json"] = "form"
     token_request_headers: dict[str, str] = Field(default_factory=dict)
     reauth_errors: frozenset[str] = frozenset({"invalid_grant"})
+    # Does the provider accept an http://localhost redirect URI?  Only "yes"/"no" when the
+    # provider's own docs say so (see docs/decisions.md); otherwise "unverified".
+    localhost_redirect: Literal["yes", "no", "unverified"] = "unverified"
+    redirect_note: str | None = None             # shown under the redirect URI in the Set up panel
     setup_url: str | None = None               # e.g. GitHub App install page; {field} placeholders
 
     # Optional hooks.

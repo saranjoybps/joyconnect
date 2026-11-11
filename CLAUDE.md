@@ -76,7 +76,8 @@ Hard rules:
 # App
 APP_ENV=local
 WEB_BASE_URL=http://localhost:3000
-API_BASE_URL=http://localhost:8000
+API_BASE_URL=http://localhost:8000          # what the browser calls (chat, SSE)
+PUBLIC_API_BASE_URL=                        # what providers redirect to; defaults to API_BASE_URL
 
 # Supabase
 SUPABASE_URL=
@@ -116,8 +117,12 @@ Only server keys (Supabase, OpenAI, encryption, state secret) are required. **Pr
 (client id/secret, app id/secret, API keys, connection strings) are entered by each user in the UI** and
 stored encrypted in `provider_apps`; `PLATFORM_*` env defaults are an optional fallback.
 
-Redirect URI to register with every OAuth provider: `{API_BASE_URL}/api/oauth/callback/{provider_id}`
-(the Set up form shows it ready to copy).
+Redirect URIs are **one per provider family**, always built from `PUBLIC_API_BASE_URL` (falling back to
+`API_BASE_URL` when unset), never from `API_BASE_URL` directly: `{PUBLIC_API_BASE_URL}/api/oauth/callback/{family}`
+with family = `google` (Sheets, Docs, Calendar, later Gmail and Google Ads), `slack`, `notion`, `github`, `meta`.
+The Set up form shows exactly that URI ready to copy. `PUBLIC_API_BASE_URL` points at a public HTTPS tunnel
+only for providers that reject `http://localhost`; the browser keeps calling `API_BASE_URL` for chat and SSE
+(quick tunnels do not carry SSE). `apps/api/.env.local` (git-ignored, written by `scripts/dev-tunnel.*`) overrides `.env`.
 
 ## 6. Database (Supabase migrations)
 
@@ -261,7 +266,7 @@ defaults → a clear `setup_required` error.
 - `POST|GET|DELETE /api/provider-apps/{provider}` → save, view (masked client id, never secrets), remove. Removing refuses with `409 has_connections` (listing them) unless `?confirm=true`, then disconnects those connections and deletes the credentials.
 - `POST /api/provider-apps/{provider}/test` → format check plus a harmless provider call (OAuth: redeem a dummy code; `invalid_client` = bad credentials, `invalid_grant` = good).
 - `POST /api/connections/{provider}/start` → resolves the provider app. OAuth: returns `{authorize_url}` and builds a signed `state` (user id, provider, provider_app id, nonce) stored in `oauth_states` with the PKCE verifier. Non-OAuth: validates the saved credentials and connects (`{connected: true}`).
-- `GET /api/oauth/callback/{provider}` → verifies state, loads **the provider_app named in the state**, exchanges code **server-side**, stores tokens via `SecretStore`, upserts `connections` (with `provider_app_id`), redirects to `{WEB_BASE_URL}/connections?connected={provider}`. Token refresh and revoke use the same app.
+- `GET /api/oauth/callback/{family}` → one route per provider family; the signed state carries the **connector id** that started the flow, so the shared Google URI routes to the right connector. Legacy per-connector routes (`/callback/google_sheets`, ...) keep working and exchange the code with the redirect URI they were called on. Verifies state, loads **the provider_app named in the state**, exchanges code **server-side**, stores tokens via `SecretStore`, upserts `connections` (with `provider_app_id`), redirects to `{WEB_BASE_URL}/connections?connected={provider}`. Token refresh and revoke use the same app.
 - `POST /api/connections/{id}/disconnect`
 - `GET /api/connections` → list for the current user (no secrets).
 
@@ -303,7 +308,7 @@ provider credentials live in env (except optional `PLATFORM_*` defaults).
 
 ### Google (Sheets, Docs, Calendar; Gmail later)
 - Authorize: `https://accounts.google.com/o/oauth2/v2/auth` · Token: `https://oauth2.googleapis.com/token` · Revoke: `https://oauth2.googleapis.com/revoke`
-- Credentials: one Google OAuth client (`client_id`, `client_secret`) shared by Sheets, Docs and Calendar (`app_provider='google'`); register all three redirect URIs.
+- Credentials: one Google OAuth client (`client_id`, `client_secret`) shared by Sheets, Docs and Calendar (`app_provider='google'`); register the single redirect URI `{PUBLIC_API_BASE_URL}/api/oauth/callback/google`. Google accepts `http://localhost` redirects for web clients (verified in Google's OAuth docs).
 - Extra params: `access_type=offline`, `prompt=consent`, `include_granted_scopes=true`. A refresh token is only returned on first authorization, so keep `prompt=consent`.
 - Scopes: `https://www.googleapis.com/auth/spreadsheets`, `.../documents`, `.../calendar.events`, Gmail later: `.../gmail.send` only.
 - **VERIFY** each scope's sensitivity in Google's scope table. Sheets `spreadsheets` is sensitive; full `drive` and `gmail.readonly` are restricted (annual security assessment). Do **not** request restricted scopes.
@@ -323,18 +328,19 @@ provider credentials live in env (except optional `PLATFORM_*` defaults).
 ### Slack
 - Authorize: `https://slack.com/oauth/v2/authorize` (bot scopes in `scope`, comma-separated) · Token: `https://slack.com/api/oauth.v2.access` (POST form).
 - Credentials: Slack app `client_id`, `client_secret` (HTTP Basic on the token endpoint).
+- Redirect URI `.../callback/slack`. **Slack requires HTTPS redirect URLs** (verified in Slack's docs): use the tunnel in local dev.
 - Bot scopes: `chat:write`, `channels:read`, `users:read`. Store the `xoxb-` bot token from the top level of the response. Bot tokens do not expire unless token rotation is enabled.
 - Tools: `slack__list_channels` read, `slack__post_message(channel, text)` write.
 
 ### Notion
 - Authorize: `https://api.notion.com/v1/oauth/authorize` (`client_id`, `redirect_uri`, `response_type=code`, `owner=user`, `state`) · Token: `https://api.notion.com/v1/oauth/token` with **HTTP Basic** auth (`client_id:client_secret`) → `token_auth_style='basic'`.
-- Credentials: public integration `client_id`, `client_secret`.
+- Credentials: public integration `client_id`, `client_secret`. Redirect URI `.../callback/notion`. Notion's docs do not state a localhost rule (unverified): try localhost, use the tunnel if rejected.
 - Users choose which pages to share in Notion's page picker. Each user authorizes individually. Support refresh (`grant_type=refresh_token`). Header `Notion-Version` must be sent; **VERIFY** the current value.
 - Tools: `notion__search(query)` read, `notion__get_page(page_id)` read, `notion__query_database(database_id, filter?)` read, `notion__create_page(parent_id, title, content?)` write.
 
 ### GitHub (use a GitHub App, not an OAuth App)
 - GitHub Apps give fine-grained permissions and per-repo installation. User access tokens expire after 8 hours with a 6-month refresh token. **VERIFY** endpoints and the install flow in the GitHub Apps docs.
-- Credentials: GitHub App `client_id` (not the App ID), `client_secret`, optional `app_slug` (install link).
+- Credentials: GitHub App `client_id` (not the App ID), `client_secret`, optional `app_slug` (install link). Redirect URI `.../callback/github`. GitHub's docs do not state a localhost rule (unverified; its own tutorials use localhost): try localhost, use the tunnel if rejected.
 - Permissions: Issues (read/write), Pull requests (read), Contents (read), Metadata (read).
 - Tools: `github__list_repos`, `github__list_issues(repo, state?)` read; `github__create_issue(repo, title, body)`, `github__comment_on_issue(repo, number, body)` write.
 
@@ -346,7 +352,7 @@ provider credentials live in env (except optional `PLATFORM_*` defaults).
 - `run_select` rules: single statement, must start with `SELECT` or `WITH`, reject anything containing DDL/DML keywords, run inside `BEGIN READ ONLY`, `statement_timeout=10s`, cap at 500 rows.
 
 ### Meta (Phase 5)
-- Credentials: Meta app `app_id`, `app_secret` (`client_id_field='app_id'`, `client_secret_field='app_secret'`).
+- Credentials: Meta app `app_id`, `app_secret` (`client_id_field='app_id'`, `client_secret_field='app_secret'`). Redirect URI `.../callback/meta` (`app_provider='meta'`). Meta enforces HTTPS for OAuth redirects by default and only exempts localhost in development mode per an old announcement (**VERIFY** in the App Dashboard): use the tunnel.
 - Facebook Login, code exchange on the server, then exchange for a **long-lived user token** (about 60 days) via `grant_type=fb_exchange_token`. An expired token cannot be extended, so on expiry set `needs_reauth`.
 - Start with `ads_read`. `ads_management` and the full Marketing API Access Tier need App Review. The tier was renamed from "Ads Management Standard Access" on 2026-05-04.
 - Graph API version from `META_GRAPH_VERSION`. **VERIFY** current version and permission names.

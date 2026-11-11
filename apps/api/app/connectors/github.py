@@ -109,6 +109,9 @@ MANIFEST = ConnectorManifest(
                                help_text="From the app's public URL github.com/apps/SLUG; used for the install link.")],
     ),
     console_url="https://github.com/settings/apps",
+    localhost_redirect="unverified",
+    redirect_note="GitHub's docs do not state a localhost rule (its own tutorials use http://localhost "
+                  "callbacks). Try localhost first; if GitHub rejects it, use the public HTTPS tunnel.",
     setup_guide=[
         "Create a GitHub App (Settings > Developer settings > GitHub Apps > New GitHub App), not an OAuth App.",
         "Callback URL: the redirect URI below. Tick 'Expire user authorization tokens'. Webhook: off.",

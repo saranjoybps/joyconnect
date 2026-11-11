@@ -79,10 +79,13 @@ MANIFEST = ConnectorManifest(
         id_pattern=r"[0-9]+\.[0-9]+", id_hint="Slack client IDs look like 1234567890.1234567890",
     ),
     console_url="https://api.slack.com/apps",
+    localhost_redirect="no",
+    redirect_note="Slack requires HTTPS redirect URLs (its docs: \"A Redirect URL must also use HTTPS\"). "
+                  "http://localhost is not accepted: start the public HTTPS tunnel and register that URL.",
     setup_guide=[
         "Create an app at api.slack.com/apps (From scratch) in your workspace.",
         "OAuth & Permissions > Redirect URLs: add the redirect URI below. Slack requires HTTPS, "
-        "so use a tunnel such as ngrok for local development.",
+        "so use the tunnel (scripts/dev-tunnel) for local development.",
         "OAuth & Permissions > Bot Token Scopes: add the scopes listed below.",
         "Basic Information > App Credentials: copy the client ID and client secret here.",
     ],

@@ -124,7 +124,9 @@ class ProviderAppService:
         client_id = public.pop(manifest.client_id_field, None)
 
         secret_id = await self.store.put(user_id, {"secrets": secrets}) if secrets else None
-        fields = {"client_id": client_id, "secret_id": secret_id, "extra": public}
+        # Remember which redirect URI this setup was made for, to warn when it changes later.
+        fields = {"client_id": client_id, "secret_id": secret_id, "extra": public,
+                  "redirect_uri": self.settings.redirect_uri(manifest.credentials_key)}
         if row:
             saved = (await self.db.update(TABLE, {"id": row["id"]}, fields))[0]
             if row.get("secret_id"):
@@ -143,10 +145,11 @@ class ProviderAppService:
     def public_view(self, row: dict[str, Any] | None, manifest: ConnectorManifest) -> dict[str, Any]:
         """Safe for the browser: masked client id, non-secret extras, which secrets are set."""
         platform = manifest.platform_app(self.settings) is not None
+        current = self.settings.redirect_uri(manifest.credentials_key)
         if row is None:
             return {"provider": manifest.credentials_key, "source": "platform" if platform else "none",
                     "client_id_masked": None, "fields": {}, "secrets_set": [], "platform_available": platform,
-                    "created_at": None}
+                    "created_at": None, "redirect_uri_changed": False, "registered_redirect_uri": None}
         return {
             "provider": manifest.credentials_key,
             "source": "user",
@@ -155,4 +158,6 @@ class ProviderAppService:
             "secrets_set": [f.key for f in manifest.credential_fields if f.secret] if row.get("secret_id") else [],
             "platform_available": platform,
             "created_at": row.get("created_at"),
+            "redirect_uri_changed": bool(row.get("redirect_uri")) and row["redirect_uri"] != current,
+            "registered_redirect_uri": row.get("redirect_uri"),
         }
