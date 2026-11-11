@@ -41,7 +41,9 @@ class BoundTool:
         return bool(own.get("auto_approve_writes")) and bool(self.connection.get("auto_approve_writes"))
 
     def scope_error(self) -> str:
-        label = self.manifest.permission_name
+        names = list(dict.fromkeys(self.manifest.scope_name(s) for s in self.missing)) or [
+            self.manifest.permission_name]
+        label = " and ".join(names)
         return (f"{self.manifest.name} is connected, but Google did not grant the {label} permission, "
                 f"so this can't run. Reconnect {self.manifest.name} and tick the {label} permission.")
 

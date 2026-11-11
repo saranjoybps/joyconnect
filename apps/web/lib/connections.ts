@@ -77,6 +77,17 @@ const SCOPE_NAMES: Record<string, string> = {
   "https://www.googleapis.com/auth/spreadsheets": "Google Sheets (read and write)",
   "https://www.googleapis.com/auth/documents": "Google Docs (read and write)",
   "https://www.googleapis.com/auth/calendar.events": "Google Calendar events",
+  "https://www.googleapis.com/auth/calendar.calendarlist.readonly": "Calendar list (read)",
+  "https://www.googleapis.com/auth/calendar.freebusy": "Calendar free/busy",
+  "https://www.googleapis.com/auth/gmail.send": "Send email (Gmail)",
+  "https://www.googleapis.com/auth/gmail.labels": "Gmail labels",
+  "https://www.googleapis.com/auth/drive.file": "Google Drive (files this app created)",
+  "https://www.googleapis.com/auth/presentations": "Google Slides (read and write)",
+  "https://www.googleapis.com/auth/forms.body": "Google Forms (create and edit)",
+  "https://www.googleapis.com/auth/forms.responses.readonly": "Form responses (read)",
+  "https://www.googleapis.com/auth/tasks": "Google Tasks (read and write)",
+  "https://www.googleapis.com/auth/contacts": "Google Contacts (read and write)",
+  "https://www.googleapis.com/auth/meetings.space.created": "Google Meet spaces this app created",
 };
 
 /** Human name for a granted scope; unknown scopes show their last path segment. */

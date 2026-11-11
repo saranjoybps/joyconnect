@@ -139,16 +139,32 @@ Redirect URI pattern (one per provider family, built from `PUBLIC_API_BASE_URL`)
 (later `meta`). The Set up panel shows the exact URI for your setup. See "Local OAuth setup" below for
 localhost vs the HTTPS tunnel.
 
-### Google (one app for Sheets, Docs and Calendar)
-1. https://console.cloud.google.com → create a project → APIs & Services → enable **Google Sheets API**,
-   **Google Docs API**, **Google Calendar API**.
+### Google (one app for every Google connector)
+1. https://console.cloud.google.com → create a project → APIs & Services → Library → enable the API for each
+   connector you use (table below).
 2. Google Auth Platform → Audience: External; add yourself under **Test users**.
-3. Data access → add scopes `openid`, `.../auth/userinfo.email`, `.../auth/spreadsheets`,
-   `.../auth/documents`, `.../auth/calendar.events` (sensitive, not restricted; verification only needed
-   beyond test users).
-4. Clients → Create client → **Web application** → Authorized redirect URI (one, shared by Sheets, Docs
-   and Calendar): `http://localhost:8000/api/oauth/callback/google`.
+3. Data access → add `openid`, `.../auth/userinfo.email` and the scopes in the table (all prefixed
+   `https://www.googleapis.com/auth/`). Nothing here is a restricted scope.
+4. Clients → Create client → **Web application** → one Authorized redirect URI shared by all Google cards:
+   `http://localhost:8000/api/oauth/callback/google`.
 5. Paste the client ID (`…apps.googleusercontent.com`) and secret (`GOCSPX-…`) into any Google card's Set up.
+
+| Connector | API to enable | Scopes to add under Data access |
+| --- | --- | --- |
+| Google Sheets | Google Sheets API | `spreadsheets` |
+| Google Docs | Google Docs API | `documents` |
+| Google Calendar | Google Calendar API | `calendar.events`, `calendar.calendarlist.readonly`, `calendar.freebusy` |
+| Gmail | Gmail API | `gmail.send`, `gmail.labels` |
+| Google Drive | Google Drive API | `drive.file` |
+| Google Slides | Google Slides API | `presentations` |
+| Google Forms | Google Forms API | `forms.body`, `forms.responses.readonly` |
+| Google Tasks | Google Tasks API | `tasks` |
+| Google Contacts | People API | `contacts` |
+| Google Meet | Google Meet REST API | `meetings.space.created` |
+
+Gmail has no "create draft" tool: drafts need `gmail.compose`, which Google classifies as restricted. Each
+card's Set up form shows its own API and scopes. On the consent screen tick every permission, otherwise the
+card shows "Partial access".
 
 ### Slack
 1. https://api.slack.com/apps → Create New App → From scratch → pick your workspace.

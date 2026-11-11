@@ -139,3 +139,24 @@ Each entry: what CLAUDE.md says, what the live docs say (checked 2026-11-11), wh
   "insufficient" from Google (revoked grant) is mapped to the same message.
 - **tokeninfo not used**: the token response `scope` field is authoritative and documented; tokeninfo would
   put the access token in a URL.
+
+
+## Google Workspace connectors (2026-11-11)
+
+Docs used: developers.google.com/workspace/{gmail,drive,slides,forms,tasks,people,meet,calendar,docs,sheets}
+(API references and each service's auth/scopes page); common quota/error behaviour 429 + `Retry-After`.
+
+| Connector | Scopes chosen | Why / skipped |
+| --- | --- | --- |
+| Gmail | `gmail.send`, `gmail.labels` | `messages.send` is covered by `gmail.send` (sensitive); `labels.list` is not covered by send, so the non-sensitive `gmail.labels` is added. **Skipped: create draft.** `drafts.create` needs `gmail.compose` (restricted, annual security assessment), `gmail.modify` or `readonly`. Send is tagged destructive (always asks). |
+| Drive | `drive.file` | Non-sensitive; only files this app created. Full `drive` is restricted. Upload is multipart text up to 5 MB. |
+| Slides | `presentations` | Sensitive. Works on decks given by link; `drive.file` would only cover app-created decks. |
+| Forms | `forms.body`, `forms.responses.readonly` | create/batchUpdate and responses.list respectively. |
+| Tasks | `tasks` | Single read/write scope. Delete is destructive. |
+| Contacts | `contacts` | People API connections.list, searchContacts, createContact. |
+| Meet | `meetings.space.created` | Create spaces and read spaces the app created. |
+| Calendar (extended) | `calendar.events`, `calendar.calendarlist.readonly`, `calendar.freebusy` | Per-tool scopes; existing connections without the new two show "Partial access" until reconnected. |
+| Docs / Sheets (extended) | unchanged | replace text, insert table; list tabs, add tab, clear range (destructive). |
+
+Not verified from the docs available: the sensitivity classification of the Forms, Tasks, Contacts and Meet
+scopes. Check them under Google Auth Platform > Data access before going beyond test users.

@@ -50,15 +50,15 @@ CREDENTIAL_FIELDS = oauth_client_fields(
     id_hint="Should look like 1234567890-abc123.apps.googleusercontent.com",
 )
 SETUP_GUIDE = [
-    "Create a Google Cloud project, then enable the Google Sheets, Docs and Calendar APIs.",
     "Google Auth Platform > Audience: choose External and add yourself as a test user.",
-    "Data access: add the scopes listed below.",
-    "Clients > Create client > Web application, and add the redirect URI listed below (one URI for Sheets, Docs and Calendar).",
-    "Copy the client ID and secret here. One Google app serves Sheets, Docs and Calendar.",
+    "Google Auth Platform > Data access: add the scopes listed below.",
+    "Clients > Create client > Web application, and add the redirect URI listed below (one URI for every Google connector).",
+    "Copy the client ID and secret here. One Google app serves all Google connectors.",
 ]
 
 
-def google_manifest(*, id: str, name: str, description: str, scopes: list[str], tools: list[ToolDef]) -> ConnectorManifest:
+def google_manifest(*, id: str, name: str, description: str, scopes: list[str], tools: list[ToolDef],
+                    api_to_enable: str, scope_labels: dict[str, str] | None = None) -> ConnectorManifest:
     return ConnectorManifest(
         id=id,
         name=name,
@@ -80,7 +80,9 @@ def google_manifest(*, id: str, name: str, description: str, scopes: list[str], 
         localhost_redirect="yes",
         redirect_note="Google allows http://localhost redirect URIs for web application clients. "
                       "All Google connectors share this one URI.",
-        setup_guide=SETUP_GUIDE,
+        setup_guide=[f"Enable the {api_to_enable} (APIs & Services > Library).", *SETUP_GUIDE],
+        api_to_enable=api_to_enable,
+        scope_labels=scope_labels or {},
         account_label=google_account_label,
         revoke=google_revoke,
         tools=tools,
@@ -99,3 +101,14 @@ def parse_google_file_id(value: str) -> str:
     if re.fullmatch(r"[a-zA-Z0-9_-]{10,}", value):
         return value
     raise ValueError("Not a Google file ID or URL")
+
+
+_PATH_ID_RE = re.compile(r"^[A-Za-z0-9_\-.@=]{1,200}$")
+
+
+def path_id(value: str, what: str = "id") -> str:
+    """An id that is safe to put in a URL path (Google ids are URL-safe tokens)."""
+    value = (value or "").strip()
+    if not _PATH_ID_RE.match(value):
+        raise ValueError(f"Not a valid {what}")
+    return value

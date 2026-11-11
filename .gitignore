@@ -13,3 +13,4 @@ node_modules/
 next-env.d.ts
 coverage/
 .api.log
+.web.log

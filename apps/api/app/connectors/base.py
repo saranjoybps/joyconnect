@@ -203,6 +203,9 @@ class ConnectorManifest(BaseModel):
     # the connection "partial" instead of silently assuming everything requested was granted.
     verifies_scopes: bool = False
     permission_label: str | None = None          # human name of the permission, e.g. "Sheets"
+    # Human names for individual scopes when a connector has several (e.g. Calendar's free/busy).
+    scope_labels: dict[str, str] = Field(default_factory=dict)
+    api_to_enable: str | None = None             # e.g. "Gmail API": enable it in Google Cloud Console
     localhost_redirect: Literal["yes", "no", "unverified"] = "unverified"
     redirect_note: str | None = None             # shown under the redirect URI in the Set up panel
     setup_url: str | None = None               # e.g. GitHub App install page; {field} placeholders
@@ -223,6 +226,9 @@ class ConnectorManifest(BaseModel):
     @property
     def permission_name(self) -> str:
         return self.permission_label or self.name
+
+    def scope_name(self, scope: str) -> str:
+        return self.scope_labels.get(scope) or self.scope_labels.get(normalize_scope(scope)) or self.permission_name
 
     @property
     def credentials_key(self) -> str:
@@ -306,4 +312,8 @@ def raise_for_status(resp: httpx.Response, what: str) -> None:
                 body.get("message") or body.get("error") or "")
         except Exception:  # noqa: BLE001
             pass
+        if resp.status_code == 429:
+            wait = resp.headers.get("Retry-After")
+            raise ToolError(f"{what} was rate limited by the provider (429). "
+                            f"Try again{' in ' + wait + ' seconds' if wait else ' in a minute'}.")
         raise ToolError(f"{what} failed ({resp.status_code}){': ' + str(detail) if detail else ''}")

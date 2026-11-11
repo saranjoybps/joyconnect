@@ -33,15 +33,20 @@ def test_expected_risk_levels():
     reads = {"google_sheets__get_values", "google_docs__get_document", "google_calendar__list_events",
              "slack__list_channels", "notion__search", "notion__get_page", "notion__query_database",
              "github__list_repos", "github__list_issues"}
+    read_suffixes = ("__get_", "__list_", "__search", "__free_busy", "__query_")
     for name, (_, t) in tools.items():
-        assert (t.risk == "read") == (name in reads), name
+        is_read = name in reads or any(x in name for x in read_suffixes)
+        assert (t.risk == "read") == is_read, name
+    assert tools["gmail__send_email"][1].risk == "destructive"
+    for n in ("google_calendar__delete_event", "google_sheets__clear_range", "google_tasks__delete_task"):
+        assert tools[n][1].risk == "destructive", n
 
 
 def test_manifests_use_minimum_scopes():
     m = all_manifests()
     assert m["google_sheets"].scopes == ["openid", "email", "https://www.googleapis.com/auth/spreadsheets"]
     assert m["google_docs"].scopes[-1] == "https://www.googleapis.com/auth/documents"
-    assert m["google_calendar"].scopes[-1] == "https://www.googleapis.com/auth/calendar.events"
+    assert "https://www.googleapis.com/auth/calendar.events" in m["google_calendar"].scopes
     assert m["slack"].scopes == ["chat:write", "channels:read", "users:read"]
     for g in ("google_sheets", "google_docs", "google_calendar"):
         assert not any("drive" in s or "gmail" in s for s in m[g].scopes)
