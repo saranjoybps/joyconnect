@@ -17,7 +17,8 @@ Row = dict[str, Any]
 
 
 class Database(Protocol):
-    async def select(self, table: str, filters: Row | None = None, order: str | None = None) -> list[Row]: ...
+    async def select(self, table: str, filters: Row | None = None, order: str | None = None,
+                     limit: int | None = None) -> list[Row]: ...
     async def insert(self, table: str, row: Row) -> Row: ...
     async def update(self, table: str, filters: Row, values: Row) -> list[Row]: ...
     async def delete(self, table: str, filters: Row) -> list[Row]: ...
@@ -54,10 +55,13 @@ class SupabaseRestDatabase:
             raise RuntimeError(f"Supabase {method} {path} failed with {resp.status_code}: {resp.text[:300]}")
         return resp.json() if resp.content else None
 
-    async def select(self, table: str, filters: Row | None = None, order: str | None = None) -> list[Row]:
+    async def select(self, table: str, filters: Row | None = None, order: str | None = None,
+                     limit: int | None = None) -> list[Row]:
         params = {"select": "*", **_eq_params(filters)}
         if order:
             params["order"] = order
+        if limit:
+            params["limit"] = str(limit)
         return await self._request("GET", table, params=params)
 
     async def insert(self, table: str, row: Row) -> Row:
@@ -89,6 +93,7 @@ class MemoryDatabase:
     def __init__(self) -> None:
         self.tables: dict[str, list[Row]] = {}
         self.rpcs: dict[str, Any] = {}
+        self._seq = 0
 
     def _rows(self, table: str) -> list[Row]:
         return self.tables.setdefault(table, [])
@@ -98,11 +103,19 @@ class MemoryDatabase:
         return all(str(row.get(k)) == str(v) if v is not None else row.get(k) is None
                    for k, v in (filters or {}).items())
 
-    async def select(self, table: str, filters: Row | None = None, order: str | None = None) -> list[Row]:
-        return [copy.deepcopy(r) for r in self._rows(table) if self._match(r, filters)]
+    async def select(self, table: str, filters: Row | None = None, order: str | None = None,
+                     limit: int | None = None) -> list[Row]:
+        rows = [copy.deepcopy(r) for r in self._rows(table) if self._match(r, filters)]
+        if order:
+            col, _, direction = order.partition(".")
+            rows.sort(key=lambda r: (r.get(col) is None, r.get(col)), reverse=direction == "desc")
+        return rows[:limit] if limit else rows
 
     async def insert(self, table: str, row: Row) -> Row:
         row = {"id": str(uuid.uuid4()), "created_at": datetime.now(timezone.utc).isoformat(), **row}
+        if table == "messages":
+            self._seq += 1
+            row["seq"] = self._seq
         if table == "connections":
             row.setdefault("status", "active")
             row.setdefault("auto_approve_writes", False)

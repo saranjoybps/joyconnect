@@ -46,6 +46,14 @@ cd apps/api && RUN_DB_TESTS=1 pytest -q tests/test_rls_live.py   # RLS against t
 cd apps/web && npm test && npm run typecheck
 ```
 
+## Chat agent (Phase 2)
+
+- Set `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`, default `gpt-4o-mini`) in the root `.env`.
+- `POST /api/chat` streams Server-Sent Events: `token`, `tool_call`, `approval_required`, `tool_result`,
+  `error`, `done`. `POST /api/approvals/{id}/decision {"approve": bool}` resumes with the same events.
+- Policy: read tools run immediately; write tools ask unless the connection has *Auto-approve writes*;
+  destructive tools always ask. Every call is audited in `tool_runs` (arguments redacted).
+
 ## Provider apps (Phase 1)
 
 Every OAuth provider uses the redirect URI **`{API_BASE_URL}/api/oauth/callback/{provider_id}`**,

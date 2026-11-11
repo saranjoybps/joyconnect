@@ -51,3 +51,27 @@ Each entry: what CLAUDE.md says, what the live docs say (checked 2026-11-11), wh
   months. Refresh failure error code is `bad_refresh_token` (treated like `invalid_grant`). Errors come
   back as HTTP 200 with an `error` field. Revoke: `DELETE /applications/{client_id}/token` (Basic).
   The app must also be *installed* on repos; `GITHUB_APP_SLUG` builds the install link.
+
+## Phase 2 — agent
+
+- **OpenAI.** Python SDK 3.x; we use Chat Completions (still supported; the guide's examples now favour
+  the Responses API, and some newer models require it for tools; `gpt-4o-mini` does not). Tools are sent
+  with `strict: true` and `parallel_tool_calls: false` (one call per turn: keeps strict mode reliable and
+  makes the approval pause/resume unambiguous). Chat Completions is non-strict by default, so `strict` is
+  set explicitly on every tool.
+- **MCP SDK 2.x renamed FastMCP to `MCPServer`.** `MCPServer.add_tool` infers schemas from Python
+  signatures; our tools are schema-first, so `app/mcp/server.py` uses the SDK's low-level
+  `Server(on_list_tools=..., on_call_tool=...)` with explicit `input_schema` and `ToolAnnotations`
+  (`read_only_hint`, `destructive_hint`, `idempotent_hint`, `open_world_hint=True`). In-process only.
+  Tests connect with `mcp.Client(server)`.
+- **Approved arguments come from the stored assistant message**, not from `tool_runs.args_redacted`
+  (which is redacted for the audit log). `approvals.preview` holds a lightly clipped copy for display.
+- **Pending approvals block new messages** in that conversation (HTTP 409) so the tool-call history sent to
+  OpenAI is always complete. Approvals expire after `APPROVAL_TTL_HOURS` (default 24).
+- **Decision endpoint streams SSE** (same events as `/api/chat`) because approving resumes the loop.
+- **Rate limit** is an in-process sliding window per user (`CHAT_RATE_LIMIT_PER_MINUTE`, default 20) on
+  `/api/chat` and decisions. Use a shared store (e.g. Redis/Postgres) when running more than one worker.
+- **Migration 0003** adds `messages.seq` (identity) for deterministic ordering and `approvals.created_at`.
+- **Tool selection.** Only tools of the user's *active* connections are offered. Above
+  `MAX_TOOLS_PER_REQUEST`, whole connectors are kept in order: mentioned in the message, then most
+  recently used.

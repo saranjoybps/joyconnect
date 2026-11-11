@@ -1,3 +1,4 @@
+import sys
 import time
 
 import jwt
@@ -73,3 +74,16 @@ def test_alg_none_rejected(client):
 ])
 def test_redaction(raw, leak):
     assert leak not in redact(raw)
+
+
+def test_traceback_is_redacted():
+    import logging
+
+    from app.core.logging import RedactingFilter
+
+    try:
+        raise ValueError("refresh_token=1//secretvalue")
+    except ValueError:
+        record = logging.LogRecord("x", logging.ERROR, __file__, 1, "failed", None, sys.exc_info())
+    RedactingFilter().filter(record)
+    assert "secretvalue" not in record.getMessage() and record.exc_info is None

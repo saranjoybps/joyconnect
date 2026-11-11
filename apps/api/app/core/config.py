@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     max_tool_steps: int = 8
     max_tools_per_request: int = 24
+    chat_rate_limit_per_minute: int = 20
+    approval_ttl_hours: int = 24
 
     google_client_id: str = ""
     google_client_secret: str = ""

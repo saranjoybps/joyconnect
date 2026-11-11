@@ -23,7 +23,13 @@ def redact(text: str) -> str:
 
 class RedactingFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        record.msg = redact(record.getMessage())
+        msg = record.getMessage()
+        if record.exc_info:
+            # Tracebacks can embed values; redact them too and drop the raw exc_info.
+            msg += "\n" + logging.Formatter().formatException(record.exc_info)
+            record.exc_info = None
+            record.exc_text = None
+        record.msg = redact(msg)
         record.args = None
         return True
 

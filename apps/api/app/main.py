@@ -6,12 +6,15 @@ import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.agent.llm import LLM, OpenAIChat
+from app.agent.runtime import AgentRuntime
 from app.core.config import Settings, get_settings
+from app.core.ratelimit import SlidingWindowLimiter
 from app.core.logging import setup_logging
 from app.core.secrets import SecretStore, build_secret_store
 from app.db.client import Database, SupabaseRestDatabase
 from app.oauth import router as oauth_router
-from app.routers import connections, health
+from app.routers import approvals, chat, connections, health
 
 
 def create_app(
@@ -19,6 +22,7 @@ def create_app(
     db: Database | None = None,
     secret_store: SecretStore | None = None,
     http: httpx.AsyncClient | None = None,
+    llm: LLM | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
 
@@ -33,6 +37,15 @@ def create_app(
         app.state.secret_store = secret_store or build_secret_store(
             settings.secret_store, app.state.db, settings.token_encryption_key
         )
+        app.state.chat_limiter = SlidingWindowLimiter()
+        llm_holder: list[LLM] = [llm] if llm else []
+
+        def llm_factory() -> LLM:
+            if not llm_holder:
+                llm_holder.append(OpenAIChat(settings))  # raises LLMError if not configured
+            return llm_holder[0]
+
+        app.state.runtime = AgentRuntime(app.state.db, app.state.secret_store, app.state.http, settings, llm_factory)
         yield
         if own_http:
             await app.state.http.aclose()
@@ -50,6 +63,8 @@ def create_app(
     app.include_router(health.router)
     app.include_router(connections.router)
     app.include_router(oauth_router.router)
+    app.include_router(chat.router)
+    app.include_router(approvals.router)
     return app
 
 
