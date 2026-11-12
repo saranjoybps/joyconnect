@@ -1,7 +1,7 @@
 # MEMORY.md — project context for future sessions
 
 Keep under 150 lines. Update before finishing every session (state, decisions, issues, next steps).
-Last updated: 2026-11-12, architecture revision (see CLAUDE.md, rewritten today).
+Last updated: 2026-11-12, after Step 5 (canvas + chat modes).
 
 ## 1. What we are building
 A **chat-first workflow platform**: connectors become nodes; users build workflows by chat or by drag and drop
@@ -42,9 +42,11 @@ Revision plan (CLAUDE.md section 5): workflow engine in steps 1-7 below. Progres
 - [x] Part 1: CLAUDE.md rewritten, MEMORY.md updated.
 - [x] Step 1: workflow schema, node registry, patch API, versioning, migrations.
 - [x] Step 2: executor + worker, expressions, node records, retries, test-node, run-from-here.
-- [x] Step 3: triggers (manual, schedule, webhook). **STOPPED here: waiting for the owner's go-ahead before Step 4.**
-- [ ] Step 4 canvas UI · Step 5 chat modes/slash commands/server-side scope · Step 6 chat workflow tools + diff review +
-  delete approval · Step 7 AI Agent / LLM / Classify / Extract / Approval nodes.
+- [x] Step 3: triggers (manual, schedule, webhook).
+- [x] Step 4: canvas UI (React Flow, palette, config panel, test node, run, publish switch, schedule settings, workflows list).
+- [x] Step 5: chat modes (/custom, /workflow, /<connector>), slash menu, server-side tool scope. **STOPPED here: waiting for the owner go-ahead before Step 6.**
+- [ ] Step 6 chat workflow tools + diff review + delete approval · Step 7 AI Agent / LLM / Classify / Extract / Approval nodes.
+  Not done from the plan: Runs page grouped by workflow/node (CLAUDE.md 5.9), chat-generated workflow opening on the canvas (step 6).
 
 Known issues:
 - Migration `0006` (and the new workflow migrations) must be applied to the live Supabase project by the owner

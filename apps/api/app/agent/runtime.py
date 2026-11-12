@@ -13,6 +13,7 @@ from typing import Any, AsyncIterator, Callable
 import httpx
 
 from app.agent.llm import LLM, LLMError, LLMResult
+from app.agent.modes import CONNECTOR, Mode, allowed, describe, resolve, split_command
 from app.agent.policy import build_preview, decide, redact_args, redact_result, scrub, tool_label
 from app.agent.prompts import system_prompt
 from app.agent.response import build_action
@@ -29,6 +30,8 @@ log = logging.getLogger(__name__)
 Event = dict[str, Any]
 HISTORY_LIMIT = 40
 DECLINED = {"error": "The user declined this action."}
+MODE_REFUSAL = ("This tool is not available in the current chat mode. "
+                "Tell the user to switch mode (typing / lists them).")
 INTERRUPTED = {"error": "This action did not complete (it was interrupted). Nothing was confirmed."}
 
 
@@ -36,6 +39,15 @@ class AgentError(Exception):
     def __init__(self, status: int, message: str):
         super().__init__(message)
         self.status = status
+
+
+def describe_name(mode: Mode) -> str:
+    m = get_manifest(mode.connector or "")
+    return m.name if m else (mode.connector or "That app")
+
+
+def _mode_data(mode: Mode) -> dict[str, Any]:
+    return {"command": mode.command, "kind": mode.kind, "connector": mode.connector}
 
 
 def _ev(event: str, **data: Any) -> Event:
@@ -96,13 +108,49 @@ class AgentRuntime:
 
     # ------------------------------------------------------------------ public entry points
 
-    async def chat(self, user_id: str, conversation_id: str | None, text: str) -> AsyncIterator[Event]:
+    async def chat(self, user_id: str, conversation_id: str | None, text: str,
+                   mode: str | None = None) -> AsyncIterator[Event]:
+        """`mode` is a command word ("workflow", "trello", ...) chosen in the UI; a leading /command in the text
+        works too. The mode is saved on the conversation and applies until it is changed."""
+        chosen: Mode | None = None
+        if mode:
+            chosen = resolve(mode)
+            if chosen is None:
+                raise AgentError(422, f"Unknown mode /{mode.lstrip('/')}.")
+        typed, rest, unknown = split_command(text)
+        if typed is not None:
+            chosen, text = typed, rest
+        elif unknown is not None and text.strip() == f"/{unknown}":
+            raise AgentError(422, f"Unknown command /{unknown}. Type / to see the available modes.")
         if conversation_id:
-            if not await self.db.select("conversations", {"id": conversation_id, "user_id": user_id}):
+            rows = await self.db.select("conversations", {"id": conversation_id, "user_id": user_id})
+            if not rows:
                 raise AgentError(404, "conversation not found")
+            current = previous = Mode.from_row(rows[0])
         else:
-            conv = await self.db.insert("conversations", {"user_id": user_id, "title": text.strip()[:60]})
+            previous = Mode()
+            current = chosen or Mode()
+            conv = await self.db.insert("conversations", {
+                "user_id": user_id, "title": (text or current.command).strip()[:60],
+                # custom is the column default; leaving it out keeps chat working on a database that has not
+                # had migration 0007 (the mode columns) applied yet.
+                **({} if current.kind == "custom" else current.row)})
             conversation_id = conv["id"]
+        switched = chosen is not None and chosen != previous
+        if switched and chosen != current:         # an existing conversation changes mode
+            await self.db.update("conversations", {"id": conversation_id, "user_id": user_id}, chosen.row)
+            current = chosen
+        if current.kind == CONNECTOR and not await self.db.select(
+                "connections", {"user_id": user_id, "provider": current.connector, "status": "active"}):
+            yield _ev("error", message=f"{describe_name(current)} is not connected. Connect it on the Connections "
+                                       "page, or switch with /custom.")
+            yield _ev("done", conversation_id=conversation_id)
+            return
+        if switched or not text.strip():           # tell the UI which mode is now active
+            yield _ev("mode", **_mode_data(current))
+        if not text.strip():                       # just a mode switch, e.g. "/trello"
+            yield _ev("done", conversation_id=conversation_id)
+            return
         if await self._pending_approvals(user_id, conversation_id):
             raise AgentError(409, "Approve or reject the pending action first.")
         limit = self.settings.daily_chat_message_limit
@@ -148,7 +196,9 @@ class AgentRuntime:
             bound = await self._bind(user_id, preview["tool"])
             args = await self._call_args(conversation_id, tool_call_id)
             ms = None
-            if bound is None or args is None:
+            if not allowed(await self._mode(user_id, conversation_id), preview["tool"]):
+                ok, result = False, {"error": MODE_REFUSAL}      # scope is checked again when the call is resumed
+            elif bound is None or args is None:
                 ok, result = False, {"error": "This app is no longer connected."}
             else:
                 yield self._tool_call_event(tool_call_id, bound)
@@ -185,8 +235,9 @@ class AgentRuntime:
             return
 
         for _step in range(self.settings.max_tool_steps):
-            tools = await available_tools(self.db, user_id, latest_text, self.settings.max_tools_per_request)
-            messages = await self._history(conversation_id, tools)
+            mode = await self._mode(user_id, conversation_id)
+            tools = await available_tools(self.db, user_id, latest_text, self.settings.max_tools_per_request, mode)
+            messages = await self._history(conversation_id, tools, mode)
             result: LLMResult | None = None
             try:
                 async for part in llm.stream(messages, [to_openai_tool(b.tool) for b in tools.values()]):
@@ -209,7 +260,7 @@ class AgentRuntime:
 
             paused = False
             for call in result.tool_calls:
-                async for ev in self._handle_call(user_id, conversation_id, call, tools):
+                async for ev in self._handle_call(user_id, conversation_id, call, tools, mode):
                     paused = paused or ev["event"] == "approval_required"
                     yield ev
             if paused:
@@ -226,12 +277,12 @@ class AgentRuntime:
                    connector_name=bound.manifest.name, risk=bound.tool.risk, label=tool_label(bound.tool))
 
     async def _handle_call(self, user_id: str, conversation_id: str, call: dict[str, Any],
-                           tools: dict[str, BoundTool]) -> AsyncIterator[Event]:
+                           tools: dict[str, BoundTool], mode: Mode) -> AsyncIterator[Event]:
         """Run one tool call. Whatever goes wrong inside, the call ends with a tool message (or a pending
         approval): an assistant tool_call without a tool result makes OpenAI reject every later turn."""
         call_id, name = call["id"], call["function"]["name"]
         try:
-            async for ev in self._handle_call_inner(user_id, conversation_id, call, tools):
+            async for ev in self._handle_call_inner(user_id, conversation_id, call, tools, mode):
                 yield ev
         except Exception as exc:  # noqa: BLE001
             log.exception("tool call %s failed: %s", name, type(exc).__name__)
@@ -252,16 +303,18 @@ class AgentRuntime:
                    for a in await self.db.select("approvals", {"status": "pending"}))
 
     async def _handle_call_inner(self, user_id: str, conversation_id: str, call: dict[str, Any],
-                                 tools: dict[str, BoundTool]) -> AsyncIterator[Event]:
+                                 tools: dict[str, BoundTool], mode: Mode) -> AsyncIterator[Event]:
         call_id, name = call["id"], call["function"]["name"]
-        bound = tools.get(name)
+        bound = tools.get(name) if allowed(mode, name) else None   # scope is re-checked at dispatch
         try:
             args = json.loads(call["function"]["arguments"] or "{}")
         except json.JSONDecodeError:
             args = None
 
         problem = None
-        if bound is None:
+        if not allowed(mode, name):
+            problem = MODE_REFUSAL
+        elif bound is None:
             problem = f"Unknown or unavailable tool: {name}"
         elif args is None:
             problem = "Tool arguments were not valid JSON."
@@ -358,13 +411,18 @@ class AgentRuntime:
                         return None
         return None
 
-    async def _history(self, conversation_id: str, tools: dict[str, BoundTool]) -> list[dict[str, Any]]:
+    async def _mode(self, user_id: str, conversation_id: str) -> Mode:
+        rows = await self.db.select("conversations", {"id": conversation_id, "user_id": user_id})
+        return Mode.from_row(rows[0] if rows else None)
+
+    async def _history(self, conversation_id: str, tools: dict[str, BoundTool],
+                       mode: Mode | None = None) -> list[dict[str, Any]]:
         rows = await self.db.select("messages", {"conversation_id": conversation_id}, order="seq.asc")
         rows = rows[-HISTORY_LIMIT:]
         while rows and rows[0]["role"] != "user":  # never start mid tool-exchange
             rows = rows[1:]
         names = sorted({b.manifest.name for b in tools.values()})
-        out: list[dict[str, Any]] = [{"role": "system", "content": system_prompt(names)}]
+        out: list[dict[str, Any]] = [{"role": "system", "content": system_prompt(names, describe(mode) if mode else "")}]
         rows = _repair_tool_exchanges(rows)
         for r in rows:
             if r["role"] == "assistant":

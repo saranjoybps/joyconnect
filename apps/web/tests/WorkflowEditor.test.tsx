@@ -187,7 +187,7 @@ describe("canvas edits go through the patch API", () => {
     await ready();
     rf.onNodeDragStop({}, { id: "s", position: { x: 1, y: 1 } });
     expect(await screen.findByText(/changed somewhere else/, {}, { timeout: 4000 })).toBeInTheDocument();
-    expect(screen.getByLabelText("Workflow name")).toHaveValue("Changed elsewhere");
+    await waitFor(() => expect(screen.getByLabelText("Workflow name")).toHaveValue("Changed elsewhere"));   // title syncs in an effect
   });
 
   it("a rejected edit shows the server's reason", async () => {

@@ -7,6 +7,8 @@ import { ApprovalPrompt } from "@/components/ApprovalPrompt";
 import { Markdown } from "@/components/Markdown";
 import { applyEvent, chatApi, itemsFromDetail, type ChatItem, type Conversation } from "@/lib/chat";
 import { connectionsApi } from "@/lib/connections";
+import { DEFAULT_MODE, exactMode, filterModes, nextIndex, slashQuery, type ChatMode } from "@/lib/modes";
+import { SLASH_MENU_ID, SlashMenu, optionId } from "@/components/SlashMenu";
 import type { SseEvent } from "@/lib/sse";
 
 export function ChatWindow() {
@@ -18,6 +20,10 @@ export function ChatWindow() {
   const [connected, setConnected] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const [modes, setModes] = useState<ChatMode[]>([DEFAULT_MODE]);
+  const [mode, setMode] = useState<ChatMode>(DEFAULT_MODE);
+  const [menuIndex, setMenuIndex] = useState(0);
+  const [menuClosed, setMenuClosed] = useState(false);   // Esc closes the menu until the text changes
 
   useEffect(() => {
     let alive = true;
@@ -29,6 +35,7 @@ export function ChatWindow() {
       },
       (e: Error) => alive && setError(e.message),
     );
+    chatApi.modes().then((m) => alive && setModes(m), () => undefined);
     return () => { alive = false; };
   }, []);
 
@@ -41,7 +48,9 @@ export function ChatWindow() {
     setError(null);
     setActiveId(id);
     try {
-      setItems(itemsFromDetail(await chatApi.conversation(id)));
+      const detail = await chatApi.conversation(id);
+      setItems(itemsFromDetail(detail));
+      setMode(modes.find((m) => m.command === detail.mode?.command) ?? DEFAULT_MODE);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -71,11 +80,15 @@ export function ChatWindow() {
     setActiveId(null);
     setItems([]);
     setError(null);
+    setMode(DEFAULT_MODE);
   }
 
   async function consume(stream: AsyncGenerator<SseEvent>) {
     for await (const ev of stream) {
-      if (ev.event === "done") {
+      if (ev.event === "mode") {
+        const cmd = (ev.data as { command?: string })?.command;
+        setMode((cur) => modes.find((m) => m.command === cmd) ?? (cmd === cur.command ? cur : DEFAULT_MODE));
+      } else if (ev.event === "done") {
         const id = (ev.data as { conversation_id?: string })?.conversation_id;
         if (id && id !== activeId) {
           setActiveId(id);
@@ -91,12 +104,17 @@ export function ChatWindow() {
     e?.preventDefault();
     const text = (override ?? input).trim();
     if (!text || busy) return;
+    const named = override === undefined ? exactMode(modes, text) : null;
+    if (named) {            // "/trello" on its own only switches the mode
+      pickMode(named);
+      return;
+    }
     if (override === undefined) setInput("");
     setError(null);
     setBusy(true);
     setItems((prev) => [...prev, { kind: "user", text }]);
     try {
-      await consume(chatApi.send(text, activeId));
+      await consume(chatApi.send(text, activeId, mode.command));
     } catch (err) {
       setItems((prev) => [...prev, { kind: "error", text: (err as Error).message }]);
     } finally {
@@ -122,7 +140,35 @@ export function ChatWindow() {
     }
   }
 
+  const query = slashQuery(input);
+  const menuOpen = query !== null && !menuClosed && !busy;
+  const matches = menuOpen ? filterModes(modes, query) : [];
+
+  function pickMode(m: ChatMode) {
+    setMode(m);
+    setInput("");
+    setMenuIndex(0);
+    setMenuClosed(false);
+  }
+
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (menuOpen) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setMenuIndex((i) => nextIndex(e.key as "ArrowDown" | "ArrowUp", i, matches.length));
+        return;
+      }
+      if ((e.key === "Enter" || e.key === "Tab") && !e.shiftKey && matches.length > 0) {
+        e.preventDefault();
+        pickMode(matches[Math.min(menuIndex, matches.length - 1)]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMenuClosed(true);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void send();
@@ -207,12 +253,26 @@ export function ChatWindow() {
           })}
           <div ref={endRef} />
         </div>
-        <form onSubmit={send} className="flex gap-2 border-t border-neutral-200 p-3 dark:border-neutral-800">
+        <form onSubmit={send} className="relative flex flex-wrap gap-2 border-t border-neutral-200 p-3 dark:border-neutral-800">
+          {menuOpen && <SlashMenu modes={matches} activeIndex={Math.min(menuIndex, Math.max(matches.length - 1, 0))} onPick={pickMode} onHover={setMenuIndex} />}
+          <div className="flex w-full items-center gap-2 text-xs">
+            <span data-testid="mode-chip" title={mode.description}
+              className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-0.5 font-mono font-medium dark:bg-neutral-800">
+              Mode: /{mode.command}
+              {mode.kind !== "custom" && (
+                <button type="button" aria-label="Back to /custom" onClick={() => setMode(DEFAULT_MODE)} className="ml-1 rounded px-1 hover:bg-neutral-200 dark:hover:bg-neutral-700">×</button>
+              )}
+            </span>
+            <span className="text-neutral-500">Type / to switch mode</span>
+          </div>
           <label htmlFor="chat-input" className="sr-only">Message</label>
-          <textarea id="chat-input" rows={2} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown}
+          <textarea id="chat-input" rows={2} value={input}
+            onChange={(e) => { setInput(e.target.value); setMenuClosed(false); setMenuIndex(0); }} onKeyDown={onKeyDown}
+            role="combobox" aria-autocomplete="list" aria-expanded={menuOpen} aria-controls={SLASH_MENU_ID}
+            aria-activedescendant={menuOpen && matches.length ? optionId(matches[Math.min(menuIndex, matches.length - 1)].command) : undefined}
             placeholder={hasPending ? "Approve or reject the pending action first" : "Ask the assistant to do something…"}
             disabled={busy || hasPending}
-            className="flex-1 resize-none rounded-md border border-neutral-300 bg-transparent px-3 py-2 text-sm disabled:opacity-60 dark:border-neutral-700" />
+            className="min-w-0 flex-1 resize-none rounded-md border border-neutral-300 bg-transparent px-3 py-2 text-sm disabled:opacity-60 dark:border-neutral-700" />
           <button type="submit" disabled={busy || hasPending || !input.trim()}
             className="self-end rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
             Send

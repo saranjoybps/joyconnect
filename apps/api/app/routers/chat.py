@@ -6,7 +6,9 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.agent.modes import Mode, aliases, slug
 from app.agent.response import action_from_message, plain_summary
+from app.connectors.registry import get_manifest
 from app.agent.runtime import AgentRuntime
 from app.core.ratelimit import chat_rate_limit
 from app.core.security import UserDep
@@ -26,11 +28,29 @@ RuntimeDep = Annotated[AgentRuntime, Depends(get_runtime)]
 class ChatBody(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     conversation_id: str | None = None
+    mode: str | None = Field(default=None, max_length=60)     # "custom" | "workflow" | a connector command
 
 
 @router.post("/chat", dependencies=[Depends(chat_rate_limit)])
 async def chat(body: ChatBody, user: UserDep, runtime: RuntimeDep):
-    return await sse_response(runtime.chat(user.id, body.conversation_id, body.message))
+    return await sse_response(runtime.chat(user.id, body.conversation_id, body.message, body.mode))
+
+
+@router.get("/chat/modes")
+async def chat_modes(user: UserDep, db: DbDep) -> list[dict[str, Any]]:
+    """What typing / offers: /custom, /workflow and one command per connected app."""
+    out: list[dict[str, Any]] = [
+        {"command": "custom", "kind": "custom", "label": "Custom",
+         "description": "Chat with all your connected apps (default)."},
+        {"command": "workflow", "kind": "workflow", "label": "Workflow", "description": "Plan and build workflows."},
+    ]
+    apps: dict[str, dict[str, Any]] = {}
+    for c in await db.select("connections", {"user_id": user.id, "status": "active"}, order="created_at.desc"):
+        m = get_manifest(c["provider"])
+        if m is not None and m.id not in apps:
+            apps[m.id] = {"command": slug(m.id), "kind": "connector", "connector": m.id, "label": m.name,
+                          "aliases": aliases(m.id), "description": f"Only use {m.name}."}
+    return out + sorted(apps.values(), key=lambda a: a["label"].lower())
 
 
 @router.get("/conversations")
@@ -75,7 +95,9 @@ async def get_conversation(conversation_id: str, user: UserDep, db: DbDep) -> di
         for a in await db.select("approvals", {"user_id": user.id, "status": "pending"})
         if a["preview"].get("conversation_id") == conversation_id
     ]
-    return {"id": conversation_id, "title": convs[0].get("title"), "items": items, "pending_approvals": approvals}
+    mode = Mode.from_row(convs[0])
+    return {"id": conversation_id, "title": convs[0].get("title"), "items": items, "pending_approvals": approvals,
+            "mode": {"command": mode.command, "kind": mode.kind, "connector": mode.connector}}
 
 
 @router.delete("/conversations/{conversation_id}")

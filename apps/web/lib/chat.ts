@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { readSse, type SseEvent } from "@/lib/sse";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Risk } from "@/lib/connections";
+import type { ChatMode } from "@/lib/modes";
 
 export type ApprovalPreview = {
   approval_id: string;
@@ -50,6 +51,7 @@ export type ConversationDetail = {
     | { kind: "tool"; id: string; tool: string; ok: boolean; summary: string | null; action?: Action | null }
   )[];
   pending_approvals: ApprovalPreview[];
+  mode?: { command: string; kind: string; connector: string | null };
 };
 
 /** Fallback label from a tool name: 'google_sheets__append_row' -> 'Append row'. */
@@ -135,8 +137,9 @@ export const chatApi = {
   conversations: () => apiFetch<Conversation[]>("/api/conversations"),
   conversation: (id: string) => apiFetch<ConversationDetail>(`/api/conversations/${id}`),
   remove: (id: string) => apiFetch<{ ok: boolean }>(`/api/conversations/${id}`, { method: "DELETE" }),
-  send: (message: string, conversationId: string | null) =>
-    streamPost("/api/chat", { message, conversation_id: conversationId }),
+  modes: () => apiFetch<ChatMode[]>("/api/chat/modes"),
+  send: (message: string, conversationId: string | null, mode: string | null = null) =>
+    streamPost("/api/chat", { message, conversation_id: conversationId, mode }),
   decide: (approvalId: string, approve: boolean) =>
     streamPost(`/api/approvals/${approvalId}/decision`, { approve }),
 };

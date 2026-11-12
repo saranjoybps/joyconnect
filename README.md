@@ -46,11 +46,65 @@ cd apps/api && RUN_DB_TESTS=1 pytest -q tests/test_rls_live.py   # RLS against t
 cd apps/web && npm test && npm run typecheck
 ```
 
+## How to test workflows
+
+**Once, before you start**
+1. Apply the migrations (the workflow tables and the chat-mode columns are in `0006` and `0007`):
+   `cd apps/api && .venv/Scripts/python scripts/apply_migrations.py` (needs `SUPABASE_DB_URL` in `.env`), or paste
+   `supabase/migrations/0006_*.sql` then `0007_workflows.sql` into the Supabase SQL editor.
+2. Start three things, each in its own terminal (commands at the end of this section): the **API**, the **worker**
+   (it runs queued workflows and fires schedules; without it "Run workflow" stays *queued*), and the **web app**.
+3. Open http://localhost:3000 and sign in.
+
+**A. Build and run a workflow by hand**
+1. Top nav → **Workflows**. Type `Hello` in the name box → **New workflow**. The canvas opens.
+2. In the palette (left), click **Manual Trigger**, then click **Edit Fields (Set)**. Two nodes appear.
+   (You can also drag a palette item onto the canvas.)
+3. Drag from the small dot on the right of *Manual Trigger* to the dot on the left of *Edit Fields (Set)*. A line connects them.
+4. Click the *Edit Fields (Set)* node. In the panel on the right find the **fields** box and paste:
+   `[{"name":"greeting","value":"Hello"},{"name":"sum","value":"{{ 1 + 2 }}","type":"number"}]`
+   then click outside the box. The header says *Saving…* and then *Saved · v…* each time a change is stored.
+5. Press **Test node**. The panel shows the real output: `greeting: "Hello"`, `sum: 3`. A node that changes data in
+   an app (for example Slack: Post message) first asks you to confirm.
+6. Press **Run workflow** (top right). The strip at the bottom lists every node with its status and duration.
+   A node that needs approval shows **Approve / Reject** there.
+7. Select a node and press <kbd>Delete</kbd>, or select a line and press <kbd>Delete</kbd>, to remove it.
+
+**B. Schedule**
+1. In the same workflow click **Schedule Trigger** in the palette, then connect it to *Edit Fields (Set)*.
+2. Select it. Under *Rule 1* choose **minutes**, every **1**. (The shortest allowed interval is 10 seconds.)
+3. Click the **Draft** switch in the top bar. It turns to **Published**. Select the Schedule node: it shows *Next run*.
+4. Keep the worker running. Within a minute **Runs** (or `GET /api/executions`) shows a run with mode `schedule`.
+5. Switch back to **Draft** to stop it. Edits made after publishing are *not* live until you press **Publish changes**.
+
+**C. Webhook**
+1. Click **Webhook** in the palette and connect it to *Edit Fields (Set)*. Set **authentication** to `header`.
+2. Click the **Draft** switch. A dialog shows the webhook secret **once**: copy it.
+3. Select the Webhook node: it shows the production URL (`http://localhost:8000/api/hooks/<random>`).
+4. `curl -X POST <url> -H "X-Webhook-Secret: <secret>" -H "Content-Type: application/json" -d '{"name":"Ada"}'`
+   answers `{"message":"Workflow was started"}`; without the header it answers 401. For a URL reachable from the
+   internet run `scripts/dev-tunnel.ps1` and set `PUBLIC_API_BASE_URL` to the tunnel address.
+
+**D. Chat modes**
+1. Top nav → **Chat**. The chip above the input says **Mode: /custom**.
+2. Type `/`. A menu lists `/custom`, `/workflow` and one command per connected app (for example `/google-docs`,
+   `/trello`). <kbd>↓</kbd>/<kbd>↑</kbd> move, <kbd>Enter</kbd> picks, <kbd>Esc</kbd> closes.
+3. Pick `/trello` (or any connected app). The chip changes; from now on the assistant only gets that app's tools, and
+   the server refuses any other tool even if the model asks for it. Click the **×** on the chip to go back to `/custom`.
+
+**Restart the servers** (stop the old ones first; on Windows `--reload` can leave an orphaned process on port 8000)
+```powershell
+cd C:\connect\joyconnect\apps\api ; .\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
+cd C:\connect\joyconnect\apps\api ; .\.venv\Scripts\python.exe -m app.worker
+cd C:\connect\joyconnect\apps\web ; npm run dev
+```
+
 ## Chat agent (Phase 2)
 
 - Set `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`, default `gpt-4o-mini`) in the root `.env`.
 - `POST /api/chat` streams Server-Sent Events: `token`, `tool_call`, `approval_required`, `tool_result`,
-  `error`, `done`. `POST /api/approvals/{id}/decision {"approve": bool}` resumes with the same events.
+  `error`, `done` (plus `mode` when the chat mode changes). `POST /api/chat` accepts `mode`: `custom`, `workflow` or a
+  connector command; `GET /api/chat/modes` lists them. `POST /api/approvals/{id}/decision {"approve": bool}` resumes with the same events.
 - Policy: read tools run immediately; write tools ask unless the connection has *Auto-approve writes*;
   destructive tools always ask. Every call is audited in `tool_runs` (arguments redacted).
 

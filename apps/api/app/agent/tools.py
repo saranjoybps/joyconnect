@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from app.agent.modes import Mode, allowed
 from app.connectors.base import (ConnectorManifest, OAuthError, ProviderError, ToolContext, ToolDef, ToolError,
                                  missing_scopes)
 from app.connectors.registry import get_manifest
@@ -92,8 +93,10 @@ def _mentioned(manifest: ConnectorManifest, text: str) -> bool:
     return any(w in text for w in words)
 
 
-async def available_tools(db: Database, user_id: str, message: str, max_tools: int) -> dict[str, BoundTool]:
-    """Tools from the user's active connections only, capped at max_tools."""
+async def available_tools(db: Database, user_id: str, message: str, max_tools: int,
+                          mode: Mode | None = None) -> dict[str, BoundTool]:
+    """Tools from the user's active connections only, capped at max_tools, and only those the chat mode allows
+    (the scope is applied here, when the list is built, not in the prompt)."""
     conns = [c for c in await db.select("connections", {"user_id": user_id, "status": "active"},
                                         order="created_at.desc")]
     by_provider: dict[str, dict[str, Any]] = {}
@@ -101,6 +104,8 @@ async def available_tools(db: Database, user_id: str, message: str, max_tools: i
         by_provider.setdefault(c["provider"], c)
 
     manifests = [m for p in by_provider if (m := get_manifest(p))]
+    if mode is not None:
+        manifests = [m for m in manifests if any(allowed(mode, t.name) for t in m.tools)]
     total = sum(len(m.tools) for m in manifests)
     if total > max_tools:
         recent = await db.select("tool_runs", {"user_id": user_id}, order="created_at.desc", limit=50)
@@ -115,7 +120,8 @@ async def available_tools(db: Database, user_id: str, message: str, max_tools: i
             continue
         own = by_provider[m.id]
         for t in m.tools:
-            out[t.name] = BoundTool(m, t, pick_connection(m, t, own, conns), own)
+            if mode is None or allowed(mode, t.name):
+                out[t.name] = BoundTool(m, t, pick_connection(m, t, own, conns), own)
     return out
 
 
