@@ -157,7 +157,7 @@ export function ConnectModal(props: ConnectModalProps) {
               <p className="text-sm font-medium">Scopes to enable</p>
               <ul className="flex flex-wrap gap-1.5">
                 {connector.scopes.map((s) => (
-                  <li key={s}><code className="rounded-md border border-line bg-surface px-1.5 py-0.5 text-xs">{s}</code></li>
+                  <li key={s}><code className="rounded-lg border border-line bg-surface px-1.5 py-0.5 text-xs">{s}</code></li>
                 ))}
               </ul>
             </div>
@@ -254,7 +254,7 @@ export function ConnectModal(props: ConnectModalProps) {
                     <p className="mb-1.5 text-xs font-medium">Granted permissions ({c.scopes.length})</p>
                     <ul className="flex flex-wrap gap-1.5">
                       {c.scopes.map((s) => (
-                        <li key={s} className="rounded-md border border-line px-2 py-0.5 text-xs text-muted">{scopeLabel(s)}</li>
+                        <li key={s} className="rounded-lg border border-line px-2 py-0.5 text-xs text-muted">{scopeLabel(s)}</li>
                       ))}
                     </ul>
                   </div>

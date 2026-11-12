@@ -70,8 +70,8 @@ export function WorkflowsView() {
 
       {error && <p role="alert" className="rounded-xl border border-bad/40 p-3 text-sm text-bad">{error}</p>}
       {items === null && !error && (
-        <div aria-label="Loading workflows" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Skeleton className="h-32" /><Skeleton className="h-32" /><Skeleton className="h-32" />
+        <div aria-label="Loading workflows" className="space-y-2">
+          <Skeleton className="h-12" /><Skeleton className="h-12" /><Skeleton className="h-12" />
         </div>
       )}
       {items?.length === 0 && (
@@ -80,19 +80,15 @@ export function WorkflowsView() {
         </EmptyState>
       )}
 
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="divide-y divide-m-line overflow-hidden rounded-2xl border border-m-line bg-m-panel shadow-[var(--m-shadow)] empty:hidden">
         {items?.map((w) => (
-          <li key={w.id} className="flex flex-col gap-3 rounded-2xl border border-line p-5 transition-colors hover:border-line-strong">
-            <Link href={`/workflows/${w.id}`} className="font-medium hover:underline">{w.name}</Link>
-            <div className="flex items-center gap-2 text-xs text-muted">
-              <Badge tone={w.status === "published" ? "success" : "neutral"}>{w.status === "published" ? "Published" : "Draft"}</Badge>
-              <span>{w.node_count} node{w.node_count === 1 ? "" : "s"}</span>
-              <span>v{w.version}</span>
-            </div>
-            <div className="mt-auto flex items-center justify-between pt-2 text-sm">
-              <Link href={`/workflows/${w.id}`} className="font-medium underline underline-offset-4">Open</Link>
-              <button type="button" onClick={() => setConfirming(w)} className="text-bad underline underline-offset-4">Delete</button>
-            </div>
+          <li key={w.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 transition-colors duration-150 hover:bg-m-soft">
+            <Link href={`/workflows/${w.id}`} className="min-w-0 flex-1 truncate text-[13px] font-medium hover:underline">{w.name}</Link>
+            <Badge tone={w.status === "published" ? "success" : "neutral"}>{w.status === "published" ? "Published" : "Draft"}</Badge>
+            <span className="text-xs text-m-muted">{w.node_count} node{w.node_count === 1 ? "" : "s"}</span>
+            <span className="font-mono text-xs text-m-muted">v{w.version}</span>
+            <Link href={`/workflows/${w.id}`} className="inline-flex h-7 items-center rounded-full border border-m-line-strong px-3 text-xs font-medium hover:bg-m-soft">Open</Link>
+            <button type="button" onClick={() => setConfirming(w)} className="inline-flex h-7 items-center rounded-full px-3 text-xs text-m-bad hover:bg-m-bad/10">Delete</button>
           </li>
         ))}
       </ul>

@@ -15,7 +15,7 @@ export type ScheduleParams = { timezone?: string; rules?: Rule[] };
 
 const INTERVALS: Rule["interval"][] = ["seconds", "minutes", "hours", "days", "weeks", "months", "cron"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const INPUT = "rounded-md border border-line-strong bg-field px-2 py-1 text-sm dark:border-neutral-700";
+const INPUT = "rounded-lg border border-line-strong bg-field px-2 py-1 text-sm";
 
 function zones(): string[] {
   try {
@@ -70,9 +70,9 @@ export function ScheduleEditor({ value, onChange }: { value: ScheduleParams; onC
       </div>
 
       {rules.map((r, i) => (
-        <fieldset key={i} className="space-y-2 rounded-md border border-neutral-200 p-2 dark:border-neutral-800">
+        <fieldset key={i} className="space-y-2 rounded-lg border border-m-line p-2 ">
           <legend className="px-1 text-xs font-medium">Rule {i + 1}</legend>
-          <p className="text-xs text-neutral-600 dark:text-neutral-400">{summarize(r)}</p>
+          <p className="text-xs text-m-muted">{summarize(r)}</p>
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-xs">
               Repeat{" "}
@@ -157,7 +157,7 @@ export function ScheduleEditor({ value, onChange }: { value: ScheduleParams; onC
             </label>
           )}
           {rules.length > 1 && (
-            <button type="button" className="text-xs text-red-700 underline dark:text-red-400" onClick={() => onChange({ ...value, rules: rules.filter((_, j) => j !== i) })}>
+            <button type="button" className="text-xs text-m-bad underline" onClick={() => onChange({ ...value, rules: rules.filter((_, j) => j !== i) })}>
               Remove rule
             </button>
           )}
@@ -166,7 +166,7 @@ export function ScheduleEditor({ value, onChange }: { value: ScheduleParams; onC
       <button type="button" className="text-xs underline" onClick={() => onChange({ ...value, rules: [...rules, { interval: "days", every: 1, hour: 9, minute: 0 }] })}>
         Add rule
       </button>
-      <p className="text-xs text-neutral-600 dark:text-neutral-400">
+      <p className="text-xs text-m-muted">
         Schedules run the <strong>published</strong> version. The shortest interval is 10 seconds; runs missed while the worker was off are skipped.
       </p>
     </div>

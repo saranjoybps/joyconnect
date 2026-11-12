@@ -7,16 +7,12 @@ import { formatDuration, formatJson, runsApi, type Run, type RunsPage } from "@/
 const PAGE_SIZE = 25;
 
 const STATUS_CLS: Record<string, string> = {
-  ok: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200",
-  error: "bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-200",
-  rejected: "bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300",
-  pending: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200",
-  approved: "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-200",
+  ok: "text-m-ok", error: "text-m-bad", rejected: "text-m-muted", pending: "text-m-warn", approved: "text-m-info",
 };
 const RISK_CLS: Record<string, string> = {
-  read: "text-neutral-600 dark:text-neutral-400",
-  write: "text-amber-800 dark:text-amber-300",
-  destructive: "text-red-700 dark:text-red-400",
+  read: "text-m-muted",
+  write: "text-m-warn",
+  destructive: "text-m-bad",
 };
 
 function when(iso: string | null): string {
@@ -25,28 +21,28 @@ function when(iso: string | null): string {
 
 export function RunRow({ run }: { run: Run }) {
   return (
-    <li className="glass rounded-2xl">
+    <li>
       <details>
-        <summary className="grid cursor-pointer grid-cols-2 items-center gap-x-3 gap-y-1 p-3 text-sm sm:grid-cols-[11rem_9rem_1fr_6rem_6rem_5rem]">
-          <span className="text-neutral-600 dark:text-neutral-400">{when(run.created_at)}</span>
+        <summary className="grid cursor-pointer grid-cols-2 items-center gap-x-3 gap-y-1 px-4 py-3 text-[13px] transition-colors duration-150 hover:bg-m-soft sm:grid-cols-[11rem_9rem_1fr_6rem_6rem_5rem]">
+          <span className="text-m-muted">{when(run.created_at)}</span>
           <span className="font-medium">{run.connector_name}</span>
-          <span>{run.action}</span>
-          <span className={`text-xs font-medium uppercase ${RISK_CLS[run.risk ?? "read"] ?? ""}`}>{run.risk ?? "—"}</span>
+          <span className="font-mono text-xs">{run.action}</span>
+          <span className={`text-[11px] font-medium uppercase ${RISK_CLS[run.risk ?? "read"] ?? ""}`}>{run.risk ?? "—"}</span>
           <span>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLS[run.status] ?? STATUS_CLS.rejected}`}>
-              {run.status}
+            <span className={`inline-flex items-center gap-1.5 text-xs ${STATUS_CLS[run.status] ?? STATUS_CLS.rejected}`}>
+              <span aria-hidden className="size-1.5 rounded-full bg-current" />{run.status}
             </span>
           </span>
-          <span className="text-neutral-600 dark:text-neutral-400">{formatDuration(run.duration_ms)}</span>
+          <span className="text-m-muted">{formatDuration(run.duration_ms)}</span>
         </summary>
-        <div className="grid gap-3 border-t border-neutral-200 p-3 text-xs dark:border-neutral-800 md:grid-cols-2">
+        <div className="grid gap-3 border-t border-m-line p-3 text-xs  md:grid-cols-2">
           <div>
             <h3 className="mb-1 font-medium">Input (secrets redacted)</h3>
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2 dark:bg-neutral-900">{formatJson(run.input)}</pre>
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-m-soft p-2 font-mono ">{formatJson(run.input)}</pre>
           </div>
           <div>
             <h3 className="mb-1 font-medium">Output (secrets redacted)</h3>
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2 dark:bg-neutral-900">{formatJson(run.output)}</pre>
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-m-soft p-2 font-mono ">{formatJson(run.output)}</pre>
           </div>
         </div>
       </details>
@@ -72,7 +68,7 @@ export function RunsView() {
   }, [connector, status, offset]);
 
   const total = data?.total ?? 0;
-  const select = "rounded-xl border border-line-strong bg-field px-2 py-1.5 text-sm";
+  const select = "h-8 rounded-full border border-m-line-strong bg-m-panel px-3 text-[13px]";
 
   return (
     <section aria-labelledby="runs-title" className="space-y-4">
@@ -94,29 +90,29 @@ export function RunsView() {
             {(data?.statuses ?? ["pending", "approved", "rejected", "ok", "error"]).map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
-        <span className="text-sm text-neutral-500">{data ? `${total} run${total === 1 ? "" : "s"}` : ""}</span>
+        <span className="text-sm text-m-muted">{data ? `${total} run${total === 1 ? "" : "s"}` : ""}</span>
       </div>
 
-      {error && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{error}</p>}
-      {!data && !error && <p className="text-sm text-neutral-500">Loading…</p>}
+      {error && <p role="alert" className="text-sm text-m-bad">{error}</p>}
+      {!data && !error && <p className="text-sm text-m-muted">Loading…</p>}
       {data && data.runs.length === 0 && (
-        <p className="glass rounded-2xl border-dashed p-6 text-center text-sm text-muted">
+        <p className="rounded-2xl border border-dashed border-m-line-strong p-6 text-center text-[13px] text-m-muted">
           No runs match. Ask the assistant to do something in Chat and it will show up here.
         </p>
       )}
 
       {data && data.runs.length > 0 && (
         <>
-          <div aria-hidden className="hidden grid-cols-[11rem_9rem_1fr_6rem_6rem_5rem] gap-x-3 px-3 text-xs font-medium uppercase text-neutral-500 sm:grid">
+          <div aria-hidden className="hidden grid-cols-[11rem_9rem_1fr_6rem_6rem_5rem] gap-x-3 px-3 text-[11px] font-medium uppercase tracking-wide text-m-muted sm:grid">
             <span>Time</span><span>Connector</span><span>Tool</span><span>Risk</span><span>Status</span><span>Took</span>
           </div>
-          <ul className="space-y-2">{data.runs.map((r) => <RunRow key={r.id} run={r} />)}</ul>
+          <ul className="divide-y divide-m-line overflow-hidden rounded-2xl border border-m-line bg-m-panel shadow-[var(--m-shadow)]">{data.runs.map((r) => <RunRow key={r.id} run={r} />)}</ul>
           <div className="flex items-center gap-3 text-sm">
             <button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              className="rounded-xl border border-line-strong bg-field px-3 py-1 disabled:opacity-50">Previous</button>
+              className="h-8 rounded-full border border-m-line-strong bg-m-panel px-4 text-[13px] disabled:opacity-50">Previous</button>
             <span>{offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}</span>
             <button type="button" disabled={offset + PAGE_SIZE >= total} onClick={() => setOffset(offset + PAGE_SIZE)}
-              className="rounded-xl border border-line-strong bg-field px-3 py-1 disabled:opacity-50">Next</button>
+              className="h-8 rounded-full border border-m-line-strong bg-m-panel px-4 text-[13px] disabled:opacity-50">Next</button>
           </div>
         </>
       )}

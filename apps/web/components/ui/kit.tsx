@@ -3,46 +3,11 @@
 import { forwardRef, useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
-/* ---------- Pill buttons: primary = solid near-black (white in dark) ---------- */
-type Variant = "primary" | "secondary" | "ghost" | "danger";
-const VARIANT: Record<Variant, string> = {
-  primary: "bg-m-ink text-m-ink-fg hover:opacity-90",
-  secondary: "border border-m-line-strong bg-m-panel text-m-text hover:bg-m-soft",
-  ghost: "text-m-muted hover:bg-m-soft hover:text-m-text",
-  danger: "border border-m-bad/40 bg-m-panel text-m-bad hover:bg-m-bad/10",
-};
-const SIZE = { sm: "h-7 px-3 text-xs gap-1.5", md: "h-9 px-4 text-[13px] gap-2", lg: "h-10 px-5 text-sm gap-2" };
-
-export const MButton = forwardRef<
-  HTMLButtonElement,
-  ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: keyof typeof SIZE; icon?: LucideIcon }
->(function MButton({ variant = "primary", size = "md", icon: Icon, className = "", children, type = "button", ...rest }, ref) {
-  return (
-    <button ref={ref} type={type} {...rest}
-      className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 ${VARIANT[variant]} ${SIZE[size]} ${className}`}>
-      {Icon && <Icon size={15} strokeWidth={1.75} aria-hidden />}
-      {children}
-    </button>
-  );
-});
-
-export const MIconButton = forwardRef<
-  HTMLButtonElement,
-  Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & { label: string; icon: LucideIcon; tone?: "plain" | "ink"; size?: number }
->(function MIconButton({ label, icon: Icon, tone = "plain", size = 32, className = "", type = "button", ...rest }, ref) {
-  return (
-    <button ref={ref} type={type} aria-label={label} title={label} style={{ width: size, height: size }} {...rest}
-      className={`inline-flex shrink-0 items-center justify-center rounded-full transition-colors duration-150 disabled:opacity-40 ${tone === "ink" ? "bg-m-ink text-m-ink-fg hover:opacity-90" : "text-m-muted hover:bg-m-soft hover:text-m-text"} ${className}`}>
-      <Icon size={16} strokeWidth={1.75} aria-hidden />
-    </button>
-  );
-});
-
 /** Quiet pill chip (Attach, Mode, Options). */
-export const MChip = forwardRef<
+export const Chip = forwardRef<
   HTMLButtonElement,
   ButtonHTMLAttributes<HTMLButtonElement> & { icon?: LucideIcon; leading?: ReactNode }
->(function MChip({ icon: Icon, leading, className = "", children, type = "button", ...rest }, ref) {
+>(function Chip({ icon: Icon, leading, className = "", children, type = "button", ...rest }, ref) {
   return (
     <button ref={ref} type={type} {...rest}
       className={`inline-flex h-8 items-center gap-1.5 rounded-full border border-m-line bg-m-panel px-3 text-xs text-m-muted transition-colors duration-150 hover:border-m-line-strong hover:text-m-text ${className}`}>

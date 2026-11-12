@@ -56,7 +56,14 @@ async def chat_modes(user: UserDep, db: DbDep) -> list[dict[str, Any]]:
 @router.get("/conversations")
 async def list_conversations(user: UserDep, db: DbDep) -> list[dict[str, Any]]:
     rows = await db.select("conversations", {"user_id": user.id}, order="created_at.desc", limit=100)
-    return [{"id": r["id"], "title": r.get("title"), "created_at": r["created_at"]} for r in rows]
+    # One query for the one-line preview in the history panel: the newest assistant reply per conversation.
+    previews: dict[str, str] = {}
+    for m in await db.select("messages", {"user_id": user.id, "role": "assistant"}, order="created_at.desc", limit=400):
+        cid = m.get("conversation_id")
+        if cid and cid not in previews and m.get("content"):
+            previews[cid] = plain_summary(m["content"])[:140]
+    return [{"id": r["id"], "title": r.get("title"), "created_at": r["created_at"], "preview": previews.get(r["id"], "")}
+            for r in rows]
 
 
 def _tool_name(content: str | None) -> Any:

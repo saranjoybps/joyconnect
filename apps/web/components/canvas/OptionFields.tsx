@@ -7,7 +7,7 @@ import {
 } from "@/lib/options";
 
 const INPUT =
-  "w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm dark:border-neutral-700";
+  "w-full rounded-lg border border-line-strong bg-field px-2 py-1.5 text-sm";
 
 export type OptionCtx = { nodeType: string; connectionId: string | null; parameters: Record<string, unknown> };
 
@@ -62,26 +62,26 @@ function Status({
   connectionId: string | null;
   label: string;
 }) {
-  if (!connectionId) return <p className="text-xs text-neutral-600 dark:text-neutral-400">Choose an account first.</p>;
+  if (!connectionId) return <p className="text-xs text-m-muted">Choose an account first.</p>;
   if (list.blocked) {
-    return <p className="text-xs text-neutral-600 dark:text-neutral-400">Choose “{list.blocked.replace(/_/g, " ")}” first.</p>;
+    return <p className="text-xs text-m-muted">Choose “{list.blocked.replace(/_/g, " ")}” first.</p>;
   }
-  if (list.status === "loading") return <p role="status" className="text-xs text-neutral-600 dark:text-neutral-400">Loading {label}…</p>;
+  if (list.status === "loading") return <p role="status" className="text-xs text-m-muted">Loading {label}…</p>;
   if (list.status === "error" && list.error) {
     return (
-      <div role="alert" className="space-y-1 text-xs text-red-700 dark:text-red-400">
+      <div role="alert" className="space-y-1 text-xs text-m-bad">
         <p>{list.error.message}</p>
         {list.error.code === "reconnect" ? (
-          <Link href="/connections" className="inline-block rounded-md bg-red-700 px-2 py-1 font-medium text-white">Reconnect</Link>
+          <Link href="/connections" className="inline-block rounded-full bg-m-ink px-3 py-1 font-medium text-m-ink-fg">Reconnect</Link>
         ) : (
           <button type="button" className="underline" onClick={() => void list.reload()}>Try again</button>
         )}
       </div>
     );
   }
-  if (list.status === "ready" && list.note) return <p className="text-xs text-neutral-600 dark:text-neutral-400">{list.note}</p>;
+  if (list.status === "ready" && list.note) return <p className="text-xs text-m-muted">{list.note}</p>;
   if (list.status === "ready" && list.options.length === 0) {
-    return <p className="text-xs text-neutral-600 dark:text-neutral-400">Nothing found in this account.</p>;
+    return <p className="text-xs text-m-muted">Nothing found in this account.</p>;
   }
   return null;
 }
@@ -94,7 +94,7 @@ function RefreshButton({ list, label }: { list: ReturnType<typeof useOptionList>
       title={`Refresh ${label}`}
       disabled={list.status === "loading" || list.status === "idle"}
       onClick={() => void list.reload()}
-      className="rounded-md border border-neutral-300 px-2 text-sm disabled:opacity-40 dark:border-neutral-700"
+      className="rounded-lg border border-m-line-strong px-2 text-sm disabled:opacity-40"
     >
       <span aria-hidden>↻</span>
     </button>
@@ -125,10 +125,10 @@ function Frame({ id, label, required, hint, children }: { id: string; label: str
     <div className="space-y-1">
       <label htmlFor={id} className="text-xs font-medium capitalize">
         {label}
-        {required && <span aria-hidden className="text-red-600"> *</span>}
+        {required && <span aria-hidden className="text-m-bad"> *</span>}
       </label>
       {children}
-      {hint && <p className="text-xs text-neutral-600 dark:text-neutral-400">{hint}</p>}
+      {hint && <p className="text-xs text-m-muted">{hint}</p>}
     </div>
   );
 }
@@ -182,7 +182,7 @@ export function OptionsSelect(p: FieldProps) {
           </select>
         )}
         {!expr && <RefreshButton list={list} label={p.label} />}
-        <button type="button" className="rounded-md border border-neutral-300 px-2 text-xs dark:border-neutral-700" aria-pressed={expr} onClick={() => setExpr(!expr)}>
+        <button type="button" className="rounded-lg border border-m-line-strong px-2 text-xs" aria-pressed={expr} onClick={() => setExpr(!expr)}>
           Expression
         </button>
       </div>
@@ -203,18 +203,18 @@ export function MultiSelect(p: FieldProps) {
   };
   return (
     <Frame id={id} label={p.label} required={p.required} hint={p.hint}>
-      <div id={id} role="group" aria-label={p.label} className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-neutral-300 p-2 dark:border-neutral-700">
+      <div id={id} role="group" aria-label={p.label} className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-m-line-strong p-2">
         {list.options.map((o) => (
           <label key={String(o.value)} className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={chosen.includes(String(o.value))} onChange={(e) => toggle(String(o.value), e.target.checked)} />
             {o.name}
           </label>
         ))}
-        {list.options.length === 0 && <p className="text-xs text-neutral-600">{list.status === "loading" ? "Loading…" : "No choices yet."}</p>}
+        {list.options.length === 0 && <p className="text-xs text-m-muted">{list.status === "loading" ? "Loading…" : "No choices yet."}</p>}
       </div>
       <div className="flex items-center gap-2">
         <RefreshButton list={list} label={p.label} />
-        <span className="text-xs text-neutral-600 dark:text-neutral-400">{chosen.length ? `${chosen.length} selected` : "None selected"}</span>
+        <span className="text-xs text-m-muted">{chosen.length ? `${chosen.length} selected` : "None selected"}</span>
       </div>
       <Status list={list} connectionId={p.ctx.connectionId} label={p.label} />
     </Frame>
@@ -258,7 +258,7 @@ export function ResourceLocator(p: FieldProps) {
             type="button"
             aria-pressed={mode === m}
             onClick={() => setMode(m)}
-            className={`rounded-md border px-2 py-0.5 text-xs ${mode === m ? "border-neutral-900 bg-neutral-900 text-white dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900" : "border-line-strong"}`}
+            className={`rounded-md border px-2 py-0.5 text-xs ${mode === m ? "border-m-ink bg-m-ink text-m-ink-fg" : "border-line-strong"}`}
           >
             {MODE_LABEL[m]}
           </button>
@@ -308,8 +308,8 @@ export function ResourceLocator(p: FieldProps) {
             onBlur={commitUrl}
             onKeyDown={(e) => e.key === "Enter" && commitUrl()}
           />
-          {urlBad && <p role="alert" className="text-xs text-red-700 dark:text-red-400">That link does not look right, so nothing was changed.</p>}
-          {!urlBad && p.value != null && p.value !== "" && <p className="text-xs text-neutral-600 dark:text-neutral-400">ID: <code>{String(p.value)}</code></p>}
+          {urlBad && <p role="alert" className="text-xs text-m-bad">That link does not look right, so nothing was changed.</p>}
+          {!urlBad && p.value != null && p.value !== "" && <p className="text-xs text-m-muted">ID: <code>{String(p.value)}</code></p>}
         </>
       )}
       {mode === "id" && (
@@ -432,7 +432,7 @@ export function ColumnMapper(p: FieldProps) {
   };
   return (
     <Frame id={id} label={p.label} required={p.required} hint={p.hint}>
-      <div id={id} role="group" aria-label={`${p.label} columns`} className="space-y-1 rounded-md border border-neutral-200 p-2 dark:border-neutral-800">
+      <div id={id} role="group" aria-label={`${p.label} columns`} className="space-y-1 rounded-lg border border-m-line p-2 ">
         {options.map((o, i) => (
           <div key={`${i}-${String(o.value)}`} className="grid grid-cols-[7rem_1fr] items-center gap-2">
             <label htmlFor={`${id}-${i}`} className="truncate text-xs" title={o.description ? `${o.name} (${o.description})` : o.name}>{o.name}</label>
@@ -447,13 +447,13 @@ export function ColumnMapper(p: FieldProps) {
           </div>
         ))}
         {options.length === 0 && (
-          <p className="text-xs text-neutral-600 dark:text-neutral-400">
+          <p className="text-xs text-m-muted">
             {list.status === "loading" ? "Loading columns…" : "No columns yet."}
           </p>
         )}
       </div>
       <div className="flex items-center gap-2">
-        <button type="button" disabled={options.length === 0} onClick={autoMap} className="rounded-md border border-neutral-300 px-2 py-0.5 text-xs disabled:opacity-40 dark:border-neutral-700">
+        <button type="button" disabled={options.length === 0} onClick={autoMap} className="rounded-lg border border-m-line-strong px-2 py-0.5 text-xs disabled:opacity-40">
           Auto-map from input
         </button>
         <button

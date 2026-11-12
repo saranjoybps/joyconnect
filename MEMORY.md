@@ -1,7 +1,7 @@
 # MEMORY.md — project context for future sessions
 
 Keep under 150 lines. Update before finishing every session (state, decisions, issues, next steps).
-Last updated: 2026-11-12, after the glassmorphism redesign.
+Last updated: 2026-11-12, after the minimal-design migration.
 
 ## 1. What we are building
 A **chat-first workflow platform**: connectors become nodes; users build workflows by chat or by drag and drop
@@ -80,47 +80,32 @@ cd C:\connect\joyconnect\apps\web ; npx vitest run ; npm run typecheck
 Env lives in git-ignored root `.env`, `apps/api/.env.local`, `apps/web/.env.local`.
 Docs: CLAUDE.md (design + rules), docs/decisions.md, README.md (setup, provider apps).
 
-## UI redesign (2026-11-12)
-- DESIGN DIRECTION (changed 2026-11-12, replaces the earlier strict black-and-white style): colourful GLASSMORPHISM,
-  light (soft white / pale lavender-blue) and dark (deep navy / violet). Tokens are CSS variables in
-  `apps/web/app/globals.css`: text, border, surface, field, glass (`--glass-*`), shadow, gradient
-  (indigo -> violet -> cyan-700), status (emerald / amber / rose / sky = `ok / warn / bad / info`). Class-based dark
-  mode (`<html class="dark">`, inline init script, no flash); Light / Dark / System saved per user (`theme:<userId>`).
-- Glass rules: `.glass` (blur 18px) for sidebar, cards, composer, popovers; `.glass-strong` (blur 24px) for modals,
-  drawers, toasts; `.glass-lite` (NO blur) for canvas nodes, palette, config drawer, toolbars so panning stays smooth.
-  `@supports not (backdrop-filter)` falls back to a solid `--glass-solid`. Do not stack blur layers; no blur over the canvas.
-- Aurora background = one fixed `body::before` layer, animated slowly, off under prefers-reduced-motion.
-- Contrast: `npm run contrast` (apps/web/scripts/contrast.mjs) checks token pairs against WCAG AA over the worst aurora
-  blob in both themes; keep it passing when changing tokens. Gradient button/bubbles use white text on stops that pass.
-- Legacy `neutral-*`, `red-*`, `blue-*` Tailwind colours are retinted in globals.css (@theme) so older components follow.
-- Components in `apps/web/components/ui/` (Button with gradient primary, Field, Card/Badge/Skeleton/EmptyState/PageHeader,
-  Tabs, Modal (focus trap, `alert` = alertdialog), Toast, icons, BrandLogo). Use these, not ad-hoc classes.
-- App shell `components/shell/` (collapsible sidebar, chat history grouped by date, search, rename/delete, theme
-  toggle, user menu, mobile drawer). Sidebar and ChatWindow talk through `lib/chatBus.ts` events and `?c=<id>`.
-- Chat: stop button (AbortController), tool timeline cards (input/output/duration), memory event ("Memory used" ->
-  /memory), regenerate and edit-and-resend via `POST /api/conversations/{id}/rewind {user_index}`, rename via
-  `PATCH /api/conversations/{id}`. SSE `tool_call.input`, `tool_result.output/duration_ms`, new `memory` event.
-- Connections: card grid + category filters + 4-step modal (`components/connections/ConnectModal.tsx`).
-- Logos: `simple-icons` marks in official brand colour on a small white glass tile (dark marks stay visible in dark mode);
-  Slack and Google Contacts are not in the package, so they use a gradient monogram (no recreated logo).
-- New `/settings` page; every module (shell, chat, Connections, Workflows list/canvas, Runs, Memory, Settings, Login) uses the glass style.
-- Tests: API 621+ passed; web 168 passed; `next build` passes.
-
-## Design direction v4 (2026-11-12, IN REVIEW: preview built, waiting for owner approval)
-- The owner rejected the glassmorphism/glow and the "premium dark" directions. New direction: MINIMAL, modelled on a
-  reference image of a minimal AI chat product (own logo/name/illustrations, not copied): a large rounded window (24px)
-  floating on a soft gradient page (light: peach to lavender; dark: charcoal to indigo); window surface off-white / near-black.
-- Layout: slim left sidebar (Home, Connections, Workflows, Runs, Memory, Settings; an "AI tools" group listing Modes;
-  user card with name, email and a Light/Dark/System toggle at the bottom). NO conversations in the sidebar. Chat history is
-  a separate collapsible RIGHT panel (search, title + one-line preview + time, rename/delete menu, "Create new chat" at the
-  bottom; hidden by default on small screens, toggled by a history icon). Chat home: abstract glyph, "Welcome, <first name>",
-  "How can I help you today?", three suggestion cards that fill the composer. Composer pinned at the bottom with Attach,
-  Mode (opens the slash list), Options (model, memory), mic, round ink send; "/" opens the command menu.
-- Style: hairline borders, soft shadows, 12-16px card radii, pill buttons/chips, primary = solid near-black pill (white in
-  dark), neutral palette, one soft accent used sparingly, desaturated status shown as dot + text (no filled badges),
-  Geist + Geist Mono, Lucide icons, 150ms transitions, reduced motion honoured. No glass, no glow, no gradients on UI.
-- Tokens are `--m-*` / `m-*` Tailwind colours in `globals.css`; components in `apps/web/components/min/`; dev-only preview
-  at `/design` (404 in production). `npm run contrast` runs `scripts/contrast-min.mjs` (WCAG AA, both themes).
-- NOT yet applied to the app modules (they still use the older glass UI). After approval: migrate shell, chat, connections
-  (modal setup, Connected first), workflows (light dotted-grid canvas, slim nodes), runs, memory, settings; remove the old
-  glass tokens/aurora and `components/ui` glass; keep behaviour and tests passing.
+## UI: minimal design (2026-11-12, APPLIED to the whole app; owner approved the /design preview)
+- Direction (replaces strict monochrome, glassmorphism and "premium dark"): MINIMAL, layout idea from a reference minimal AI
+  chat product (own glyph/name/illustrations). FULL-SCREEN window (owner asked for no outer gap or rounded corners), off-white
+  (light) / near-black (dark). No glass, no glow, no blur, no gradients on UI.
+- Tokens: `--m-*` CSS variables in `apps/web/app/globals.css`, exposed as Tailwind colours `m-window, m-panel, m-soft, m-soft-2,
+  m-line, m-line-strong, m-text, m-muted, m-ink, m-ink-fg, m-accent, m-accent-soft, m-ok, m-warn, m-bad, m-info, m-canvas`.
+  Short legacy names (`bg-surface`, `text-muted`, `border-line`, `bg-field`, `text-bad`, `bg-accent` = ink, neutral-*, red-*) are
+  mapped onto the same palette in `@theme`, so old classes still render minimal. Class-based dark mode (`<html class="dark">`,
+  inline script, no flash); Light/Dark/System saved per user. `npm run contrast` (scripts/contrast-min.mjs) = WCAG AA, keep passing.
+- Style rules: hairline borders, soft shadows, 12-16px radii, pill buttons/chips, primary = solid near-black pill (white in dark),
+  status = dot + quiet text (no filled badges), Geist 13-14px + Geist Mono for IDs/tool output, Lucide icons, 150ms transitions,
+  reduced motion honoured, one soft accent (indigo) used sparingly.
+- Shell (`components/shell/`): AppShell (full screen), Sidebar (Home, Connections, Workflows, Runs, Memory, Settings; collapsible
+  "AI tools" = modes from `/api/chat/modes`; user card with name, email, Light/Dark/System toggle, Sign out; NO chat list),
+  HistoryPanel (separate right panel on /chat only: search, title + preview + time, Options menu -> Rename/Delete dialogs,
+  "Create new chat"; hidden by default below lg, toggled by the history icon, choice kept in localStorage `history-open`).
+  Sidebar/HistoryPanel/ChatWindow talk via `lib/chatBus.ts` (CHAT_OPEN/NEW/CHANGED/DELETED, CHAT_SET_MODE, CHAT_MODE_IS) and `?c=`/`?mode=`.
+- `GET /api/conversations` now also returns `preview` (newest assistant reply, one query). `lib/useUser.ts` gives name/first name/email.
+- Chat: glyph + "Welcome, <first name>" + 3 suggestion cards (fill the composer); composer with Attach and Voice (disabled, "not
+  available yet": no backend), Mode chip (list + clear), Options (memory switch via /api/memory/settings; model is server-side), "/"
+  menu, round ink Send/Stop. Messages: user = soft block, assistant = plain Markdown, tools = slim collapsible ActionCard rows,
+  approvals = inline card.
+- Connections (owner correction): MINIMAL RECTANGULAR cards with ONLY logo + tool name + one button (Set up / Connect / Manage /
+  Reconnect); state is sr-only text. Sorted Connected first, then needs-attention, ready, not set up. Setup stays in the modal.
+- Workflows = list rows; canvas = dotted grid (`Background` with `--m-dot`) with slim node cards; Runs = bordered table of expandable rows with
+  status dots; Memory and Settings use Card/Field/Button. Shared kit: `components/ui/{Button,Card,Field,Tabs,Modal,Toast,kit,BrandLogo,icons}`.
+- Logos: `simple-icons` marks in brand colour on a white tile; Slack and Google Contacts get a neutral monogram.
+- Removed: glass/aurora/gradient CSS, `components/min`, `/design` preview, `lib/groupByDate`, old contrast script.
+- Known: a few `react-hooks/set-state-in-effect` lint errors exist in data-loading components (pre-existing pattern).

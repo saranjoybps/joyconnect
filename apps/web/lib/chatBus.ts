@@ -13,3 +13,7 @@ export function on<T = unknown>(name: string, fn: (detail: T) => void): () => vo
   window.addEventListener(name, handler);
   return () => window.removeEventListener(name, handler);
 }
+
+/** The sidebar asks the chat to switch mode (detail: command); the chat reports its mode back so the sidebar can highlight it. */
+export const CHAT_SET_MODE = "chat:set-mode";
+export const CHAT_MODE_IS = "chat:mode-is";

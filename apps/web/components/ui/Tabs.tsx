@@ -4,7 +4,7 @@ import type { KeyboardEvent } from "react";
 
 export type TabItem = { id: string; label: string };
 
-/** Glass segmented tabs with arrow-key navigation (roving tabindex). */
+/** Quiet segmented tabs with arrow-key navigation (roving tabindex). */
 export function Tabs({ tabs, value, onChange, label, controls }: {
   tabs: TabItem[]; value: string; onChange: (id: string) => void; label: string; controls?: string;
 }) {
@@ -16,13 +16,13 @@ export function Tabs({ tabs, value, onChange, label, controls }: {
     (e.currentTarget.parentElement?.querySelector(`[data-tab="${next.id}"]`) as HTMLElement | null)?.focus();
   }
   return (
-    <div role="tablist" aria-label={label} className="glass inline-flex flex-wrap gap-1 rounded-2xl p-1">
+    <div role="tablist" aria-label={label} className="inline-flex flex-wrap gap-0.5 rounded-full border border-m-line bg-m-soft p-0.5">
       {tabs.map((t, i) => {
         const on = t.id === value;
         return (
           <button key={t.id} type="button" role="tab" data-tab={t.id} aria-selected={on} aria-controls={controls}
             tabIndex={on ? 0 : -1} onClick={() => onChange(t.id)} onKeyDown={(e) => onKey(e, i)}
-            className={`h-8 rounded-xl px-3 text-xs font-medium transition-colors ${on ? "btn-gradient" : "text-muted hover:bg-surface-2 hover:text-foreground"}`}>
+            className={`h-7 rounded-full px-3 text-xs font-medium transition-colors ${on ? "bg-m-panel text-m-text shadow-[var(--m-shadow)]" : "text-m-muted hover:text-m-text"}`}>
             {t.label}
           </button>
         );

@@ -85,7 +85,7 @@ export function MemoryView() {
           <label className="flex cursor-pointer items-center gap-3 text-sm font-medium">
             Memory is {enabled ? "on" : "off"}
             <input type="checkbox" role="switch" checked={enabled} disabled={busy} onChange={toggle}
-              className="relative h-6 w-11 shrink-0 cursor-pointer appearance-none rounded-full bg-line-strong transition-colors checked:bg-accent disabled:opacity-50 after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-background after:transition-transform checked:after:translate-x-5" />
+              className="relative h-6 w-11 shrink-0 cursor-pointer appearance-none rounded-full bg-m-line-strong transition-colors checked:bg-m-ink disabled:opacity-50 after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-m-panel after:transition-transform checked:after:translate-x-5" />
           </label>
         } />
 
@@ -123,7 +123,7 @@ export function MemoryView() {
 
       <ul className="space-y-2">
         {items?.map((m) => (
-          <li key={m.id} className="flex flex-wrap items-center gap-3 glass rounded-2xl p-3.5">
+          <li key={m.id} className="flex flex-wrap items-center gap-3 border border-m-line bg-m-panel shadow-[var(--m-shadow)] rounded-2xl p-3.5">
             <Badge>{KIND_LABEL[m.kind] ?? m.kind}</Badge>
             {editing?.id === m.id ? (
               <>

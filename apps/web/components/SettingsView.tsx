@@ -11,8 +11,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const THEMES: { value: ThemePref; label: string; hint: string }[] = [
   { value: "system", label: "System", hint: "Match your device" },
-  { value: "light", label: "Light", hint: "Pale lavender glass" },
-  { value: "dark", label: "Dark", hint: "Deep navy and violet" },
+  { value: "light", label: "Light", hint: "Warm off-white" },
+  { value: "dark", label: "Dark", hint: "Near-black, easy on the eyes" },
 ];
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -55,7 +55,7 @@ export function SettingsView() {
         <div role="radiogroup" aria-label="Theme" className="grid gap-3 sm:grid-cols-3">
           {THEMES.map((t) => (
             <label key={t.value}
-              className={`flex cursor-pointer flex-col gap-0.5 rounded-xl border p-4 text-sm transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ${pref === t.value ? "border-accent bg-surface-2 ring-2 ring-accent/30" : "border-line bg-field hover:border-line-strong"}`}>
+              className={`flex cursor-pointer flex-col gap-0.5 rounded-xl border p-4 text-sm transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ${pref === t.value ? "border-m-text bg-m-soft" : "border-line bg-field hover:border-line-strong"}`}>
               <input type="radio" name="theme" value={t.value} checked={pref === t.value} onChange={() => setPref(t.value)} className="sr-only" />
               <span className="font-medium">{t.label}</span>
               <span className="text-muted">{t.hint}</span>
@@ -67,14 +67,14 @@ export function SettingsView() {
       <Section title="Memory" description="What the assistant remembers between chats.">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm">Memory is <strong>{memoryOn === null ? "…" : memoryOn ? "on" : "off"}</strong>.</p>
-          <Link href="/memory" className="inline-flex h-9 items-center rounded-lg border border-line-strong px-4 text-sm font-medium hover:bg-surface-2">
+          <Link href="/memory" className="inline-flex h-9 items-center rounded-full border border-m-line-strong px-4 text-[13px] font-medium hover:bg-m-soft">
             Manage memory
           </Link>
         </div>
       </Section>
 
       <Section title="Connections" description="Apps the assistant can use, and your developer credentials for each.">
-        <Link href="/connections" className="inline-flex h-9 items-center rounded-lg border border-line-strong px-4 text-sm font-medium hover:bg-surface-2">
+        <Link href="/connections" className="inline-flex h-9 items-center rounded-full border border-m-line-strong px-4 text-[13px] font-medium hover:bg-m-soft">
           Manage connections
         </Link>
       </Section>

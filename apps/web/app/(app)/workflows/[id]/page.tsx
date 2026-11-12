@@ -11,7 +11,7 @@ async function Editor({ params }: { params: Promise<{ id: string }> }) {
 
 export default function WorkflowPage({ params }: { params: Promise<{ id: string }> }) {
   return (
-    <Suspense fallback={<p className="text-sm text-neutral-600">Loading…</p>}>
+    <Suspense fallback={<p className="text-sm text-m-muted">Loading…</p>}>
       <Editor params={params} />
     </Suspense>
   );

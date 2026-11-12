@@ -43,13 +43,12 @@ export function ActionCard({ label, status, summary, action, input, output, dura
   const statusText = status === "running" ? "Running" : status === "ok" ? "Done" : "Failed";
 
   return (
-    <li className="relative pl-6">
-      <span aria-hidden className={`absolute left-0 top-[1.05rem] size-2.5 rounded-full ring-4 ring-[var(--glass-solid)] ${DOT[status]}`} />
+    <li>
       <div role={status === "error" ? "alert" : undefined}
-        className={`glass-lite rounded-2xl text-sm ${status === "error" ? "!border-bad/50" : ""}`}>
+        className={`rounded-xl border bg-m-panel text-[13px] ${status === "error" ? "border-m-bad/40" : "border-m-line"}`}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5">
           <span className="font-medium">{label}{status === "error" ? " failed" : status === "running" ? "…" : ""}</span>
-          <span className={`text-xs ${status === "error" ? "text-bad" : status === "ok" ? "text-ok" : "text-muted"}`}>{statusText}</span>
+          <span className={`inline-flex items-center gap-1.5 text-xs ${status === "error" ? "text-bad" : status === "ok" ? "text-ok" : "text-muted"}`}><span aria-hidden className={`size-1.5 rounded-full ${DOT[status]}`} />{statusText}</span>
           {duration && <span className="text-xs text-muted">{duration}</span>}
           {status === "ok" && action?.result && action.result !== "Done" && (
             <span className="min-w-0 truncate text-xs text-muted">{action.result}</span>

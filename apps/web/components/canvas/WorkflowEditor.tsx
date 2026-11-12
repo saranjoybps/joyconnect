@@ -181,20 +181,20 @@ function Editor({ id }: { id: string }) {
   if (loadError) {
     return (
       <div className="space-y-3">
-        <p role="alert" className="text-sm text-red-800 dark:text-red-200">{loadError}</p>
+        <p role="alert" className="text-sm text-m-bad">{loadError}</p>
         <Link href="/workflows" className="underline">Back to workflows</Link>
       </div>
     );
   }
-  if (!workflow) return <p className="text-sm text-neutral-600">Loading…</p>;
+  if (!workflow) return <p className="text-sm text-m-muted">Loading…</p>;
 
   const published = publishedVersion !== null;
   const dirty = published && publishedVersion !== workflow.version;
   const node = workflow.nodes.find((n) => n.id === selected) ?? null;
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] w-full flex-col md:h-dvh">
-      <div className="glass-lite flex flex-wrap items-center gap-3 rounded-none border-x-0 border-t-0 px-3 py-2">
+    <div className="flex h-full w-full flex-col">
+      <div className="flex flex-wrap items-center gap-3 border-b border-m-line px-4 py-2">
         <Link href="/workflows" className="text-sm underline">← Workflows</Link>
         <label className="sr-only" htmlFor="wf-title">Workflow name</label>
         <input
@@ -202,9 +202,9 @@ function Editor({ id }: { id: string }) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={() => title.trim() && title !== workflow.name && void apply([{ op: "rename", name: title.trim() }])}
-          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 font-semibold hover:border-neutral-300 dark:hover:border-neutral-700"
+          className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1 font-semibold hover:border-m-line-strong"
         />
-        <span className="text-xs text-neutral-600 dark:text-neutral-400" aria-live="polite">
+        <span className="text-xs text-m-muted" aria-live="polite">
           {saving ? "Saving…" : `Saved · v${workflow.version}`}
         </span>
         <button
@@ -214,13 +214,13 @@ function Editor({ id }: { id: string }) {
           aria-label="Published"
           disabled={busy}
           onClick={() => (published ? void unpublish() : void publish())}
-          className="flex items-center gap-2 rounded-full border border-neutral-300 px-3 py-1 text-sm disabled:opacity-50 dark:border-neutral-700"
+          className="flex items-center gap-2 rounded-full border border-m-line-strong px-3 py-1 text-[13px] disabled:opacity-50"
         >
-          <span className={`inline-block h-2.5 w-2.5 rounded-full ${published ? "bg-emerald-500" : "bg-neutral-400"}`} />
+          <span className={`inline-block h-2.5 w-2.5 rounded-full ${published ? "bg-m-ok" : "bg-m-muted"}`} />
           {published ? "Published" : "Draft"}
         </button>
         {dirty && (
-          <button type="button" disabled={busy} onClick={() => void publish()} className="rounded-md border border-amber-600 px-3 py-1 text-sm text-amber-900 dark:text-amber-200">
+          <button type="button" disabled={busy} onClick={() => void publish()} className="rounded-full border border-m-warn/50 px-3 py-1 text-[13px] text-m-warn">
             Publish changes
           </button>
         )}
@@ -228,14 +228,14 @@ function Editor({ id }: { id: string }) {
           type="button"
           disabled={running}
           onClick={() => void runWorkflow()}
-          className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
+          className="rounded-full bg-m-ink px-4 py-1.5 text-[13px] font-medium text-m-ink-fg disabled:opacity-50"
         >
           {running ? "Running…" : "Run workflow"}
         </button>
       </div>
 
       {notice && (
-        <div role={notice.kind === "error" ? "alert" : "status"} className={`px-3 py-2 text-sm ${notice.kind === "error" ? "bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-100" : "bg-sky-50 text-sky-900 dark:bg-sky-950 dark:text-sky-100"}`}>
+        <div role={notice.kind === "error" ? "alert" : "status"} className={`px-3 py-2 text-sm ${notice.kind === "error" ? "border-b border-m-bad/30 bg-m-soft text-m-bad" : "border-b border-m-line bg-m-soft text-m-text"}`}>
           {notice.message}
           {notice.details && <ul className="ml-5 list-disc">{notice.details.slice(0, 8).map((d) => <li key={d}>{d}</li>)}</ul>}
           <button type="button" className="ml-3 underline" onClick={() => setNotice(null)}>Dismiss</button>
@@ -244,7 +244,7 @@ function Editor({ id }: { id: string }) {
 
       <div className="flex min-h-0 flex-1">
         <NodePalette types={types} onAdd={(nt) => addFromPalette(nt)} />
-        <div className="relative min-w-0 flex-1" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+        <div className="relative min-w-0 flex-1 bg-m-canvas" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -258,12 +258,12 @@ function Editor({ id }: { id: string }) {
             deleteKeyCode={["Backspace", "Delete"]}
             fitView
           >
-            <Background />
+            <Background gap={20} size={1} color="var(--m-dot)" />
             <Controls />
-            <MiniMap pannable zoomable />
+            <MiniMap pannable zoomable maskColor="var(--m-soft)" nodeColor="var(--m-line-strong)" style={{ background: "var(--m-panel)", border: "1px solid var(--m-line)", borderRadius: 12 }} />
           </ReactFlow>
           {workflow.nodes.length === 0 && (
-            <p className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-neutral-600">
+            <p className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-m-muted">
               Drag a node from the palette to start. Begin with a trigger.
             </p>
           )}
@@ -284,13 +284,13 @@ function Editor({ id }: { id: string }) {
       </div>
 
       {execution && (
-        <section aria-label="Run result" className="glass-lite max-h-52 overflow-y-auto rounded-none border-x-0 border-b-0 p-3 text-sm">
+        <section aria-label="Run result" className="max-h-52 overflow-y-auto border-t border-m-line bg-m-window p-3 text-[13px]">
           <p className="font-medium">
             Run {execution.execution.status}
             {execution.execution.error?.message ? `: ${execution.execution.error.message}` : ""}
           </p>
           {execution.execution.status === "queued" && (
-            <p className="text-xs text-neutral-600">Waiting for the worker. Start it with <code>python -m app.worker</code>.</p>
+            <p className="text-xs text-m-muted">Waiting for the worker. Start it with <code>python -m app.worker</code>.</p>
           )}
           <ul className="mt-1 space-y-0.5 text-xs">
             {execution.nodes.map((r, i) => (
@@ -301,24 +301,24 @@ function Editor({ id }: { id: string }) {
             ))}
           </ul>
           {execution.pending_approvals?.map((a) => (
-            <div key={a.approval_id} className="mt-2 flex items-center gap-2 rounded-md bg-amber-50 p-2 text-amber-950 dark:bg-amber-950 dark:text-amber-100">
+            <div key={a.approval_id} className="mt-2 flex items-center gap-2 rounded-lg border border-m-warn/40 bg-m-soft p-2 text-m-text">
               <span>“{String(a.node_name)}” wants to change data in {String(a.connector_name)}.</span>
-              <button type="button" onClick={() => void decide(a.approval_id, true)} className="rounded bg-emerald-700 px-2 py-1 text-xs text-white">Approve</button>
-              <button type="button" onClick={() => void decide(a.approval_id, false)} className="rounded bg-neutral-700 px-2 py-1 text-xs text-white">Reject</button>
+              <button type="button" onClick={() => void decide(a.approval_id, true)} className="rounded-full bg-m-ink px-3 py-1 text-xs text-m-ink-fg">Approve</button>
+              <button type="button" onClick={() => void decide(a.approval_id, false)} className="rounded-full border border-m-line-strong px-3 py-1 text-xs">Reject</button>
             </div>
           ))}
         </section>
       )}
 
       {secrets && (
-        <div role="alertdialog" aria-modal="true" aria-labelledby="sec-title" className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-          <div className="glass-strong w-full max-w-md space-y-3 rounded-2xl p-5">
+        <div role="alertdialog" aria-modal="true" aria-labelledby="sec-title" className="fixed inset-0 z-50 grid place-items-center bg-[var(--m-overlay)] p-4">
+          <div className="border border-m-line bg-m-panel shadow-[var(--m-shadow)] w-full max-w-md space-y-3 rounded-2xl p-5">
             <h2 id="sec-title" className="font-semibold">Copy your webhook secret now</h2>
             <p className="text-sm">It is shown only once. Send it in the header named on the Webhook node.</p>
             {Object.entries(secrets).map(([nid, s]) => (
-              <code key={nid} className="block break-all rounded bg-neutral-100 p-2 text-xs dark:bg-neutral-800">{s}</code>
+              <code key={nid} className="block break-all rounded bg-m-soft p-2 text-xs ">{s}</code>
             ))}
-            <button type="button" onClick={() => setSecrets(null)} className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm text-white dark:bg-neutral-100 dark:text-neutral-900">
+            <button type="button" onClick={() => setSecrets(null)} className="rounded-full bg-m-ink px-4 py-1.5 text-[13px] text-m-ink-fg">
               I copied it
             </button>
           </div>

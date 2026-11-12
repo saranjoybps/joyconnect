@@ -4,14 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ConnectionCard } from "@/components/ConnectionCard";
 import { ConnectModal } from "@/components/connections/ConnectModal";
-import { Card, EmptyState, PageHeader, Skeleton } from "@/components/ui/Card";
+import { EmptyState, PageHeader, Skeleton } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Field";
 import { Tabs } from "@/components/ui/Tabs";
 import { SearchIcon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/Toast";
 import {
-  CATEGORIES, categoryOf, connectionsApi, describeOAuthError, type Connection, type Connector,
+  CATEGORIES, categoryOf, cardState, connectionsApi, describeOAuthError, type Connection, type Connector,
 } from "@/lib/connections";
+
+// Connected first, then apps needing attention, then ready, then not set up (each group A to Z).
+const ORDER = { connected: 0, partial: 1, needs_reconnect: 1, ready: 2, not_set_up: 3 } as const;
 
 export function ConnectionsView() {
   const params = useSearchParams();
@@ -94,10 +97,13 @@ export function ConnectionsView() {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (connectors ?? []).filter((c) =>
-      (category === "All" || categoryOf(c.id) === category) &&
-      (!q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)));
-  }, [connectors, query, category]);
+    const rank = (c: Connector) => ORDER[cardState(c, connections.filter((x) => x.provider === c.id))];
+    return (connectors ?? [])
+      .filter((c) =>
+        (category === "All" || categoryOf(c.id) === category) &&
+        (!q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)))
+      .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  }, [connectors, connections, query, category]);
 
   const open = connectors?.find((c) => c.id === openId) ?? null;
 
@@ -108,7 +114,7 @@ export function ConnectionsView() {
 
       {notice && (
         <div role="status"
-          className={`glass flex items-center justify-between gap-3 rounded-2xl p-3.5 text-sm ${notice.kind === "error" ? "!border-bad/50 text-bad" : notice.kind === "warn" ? "!border-warn/50 text-warn" : "!border-ok/50 text-ok"}`}>
+          className={`flex items-center justify-between gap-3 rounded-xl border bg-m-panel p-3.5 text-[13px] ${notice.kind === "error" ? "border-m-bad/40 text-m-bad" : notice.kind === "warn" ? "border-m-warn/40 text-m-warn" : "border-m-ok/40 text-m-ok"}`}>
           <span>{notice.text}</span>
           <button type="button" className="underline underline-offset-4" onClick={() => router.replace("/connections")}>Dismiss</button>
         </div>
@@ -120,17 +126,15 @@ export function ConnectionsView() {
           <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <label htmlFor="connector-search" className="sr-only">Search apps</label>
           <Input id="connector-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search apps" className="pl-9" />
+            placeholder="Search apps" className="rounded-full pl-9" />
         </div>
         <Tabs label="Filter by category" controls="connector-grid" value={category} onChange={setCategory}
           tabs={categories.map((c) => ({ id: c, label: c }))} />
       </div>
 
       {connectors === null && !error && (
-        <div aria-label="Loading apps" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }, (_, i) => (
-            <Card key={i} className="space-y-4 p-5"><Skeleton className="size-11" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-9 w-full" /></Card>
-          ))}
+        <div aria-label="Loading apps" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
         </div>
       )}
 
@@ -142,7 +146,7 @@ export function ConnectionsView() {
         </EmptyState>
       )}
 
-      <ul id="connector-grid" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul id="connector-grid" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {visible.map((c) => (
           <li key={c.id}>
             <ConnectionCard connector={c} connections={connections.filter((x) => x.provider === c.id)} onOpen={(x) => setOpenId(x.id)} />

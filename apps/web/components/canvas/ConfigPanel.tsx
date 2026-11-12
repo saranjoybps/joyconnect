@@ -16,7 +16,7 @@ export function Items({ title, items }: { title: string; items: { json: unknown 
   return (
     <div>
       <p className="text-xs font-medium">{title} · {items.length} item{items.length === 1 ? "" : "s"}</p>
-      <pre className="max-h-56 overflow-auto rounded-md bg-neutral-100 p-2 text-xs dark:bg-neutral-800">
+      <pre className="max-h-56 overflow-auto rounded-md bg-m-soft p-2 text-xs ">
         {JSON.stringify(items.map((i) => i.json), null, 2)}
       </pre>
     </div>
@@ -47,13 +47,13 @@ export function ConfigPanel(p: Props) {
 function WorkflowSettings({ workflow, onApply }: { workflow: Workflow; onApply: Props["onApply"] }) {
   const s = workflow.settings ?? {};
   return (
-    <aside aria-label="Workflow settings" className="glass-lite w-80 shrink-0 space-y-3 overflow-y-auto rounded-none border-y-0 border-r-0 p-3">
+    <aside aria-label="Workflow settings" className="w-80 shrink-0 space-y-3 overflow-y-auto border-l border-m-line bg-m-window p-3">
       <h2 className="text-sm font-semibold">Workflow settings</h2>
-      <p className="text-xs text-neutral-600 dark:text-neutral-400">Select a node to configure it.</p>
+      <p className="text-xs text-m-muted">Select a node to configure it.</p>
       <label className="block space-y-1 text-xs font-medium">
         Approvals for unattended runs
         <select
-          className="w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm font-normal dark:border-neutral-700"
+          className="w-full rounded-lg border border-line-strong bg-field px-2 py-1.5 text-sm font-normal"
           value={s.auto_approve ?? "off"}
           onChange={(e) => void onApply([{ op: "set_settings", settings: { auto_approve: e.target.value } }])}
         >
@@ -62,7 +62,7 @@ function WorkflowSettings({ workflow, onApply }: { workflow: Workflow; onApply: 
           <option value="all">Auto-approve everything (including deletes)</option>
         </select>
       </label>
-      <p className="text-xs text-neutral-600 dark:text-neutral-400">
+      <p className="text-xs text-m-muted">
         Schedule and webhook runs pause at an approval when a node changes data, unless you allow it here.
       </p>
     </aside>
@@ -120,27 +120,27 @@ function NodeConfig({ workflowId, node, nodeType, siblings = [], published, last
   const shownError = test ? test.error : lastRun?.error;
 
   return (
-    <aside aria-label={`Configure ${node.name}`} className="glass-lite w-96 shrink-0 space-y-4 overflow-y-auto rounded-none border-y-0 border-r-0 p-3">
+    <aside aria-label={`Configure ${node.name}`} className="w-96 shrink-0 space-y-4 overflow-y-auto border-l border-m-line bg-m-window p-3">
       <div>
-        <p className="text-xs text-neutral-600 dark:text-neutral-400">{nodeType?.name ?? node.type}</p>
+        <p className="text-xs text-m-muted">{nodeType?.name ?? node.type}</p>
         <label className="sr-only" htmlFor="node-name">Node name</label>
         <input
           id="node-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onBlur={() => name.trim() && name !== node.name && void onApply([{ op: "rename", id: node.id, name: name.trim() }])}
-          className="w-full rounded-md border border-line-strong bg-field px-2 py-1 font-semibold dark:border-neutral-700"
+          className="w-full rounded-lg border border-line-strong bg-field px-2 py-1 font-semibold"
         />
-        {nodeType && <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">{nodeType.description}</p>}
+        {nodeType && <p className="mt-1 text-xs text-m-muted">{nodeType.description}</p>}
       </div>
 
       {nodeType?.connector && (
         <div className="space-y-1">
-          <label htmlFor="conn" className="text-xs font-medium">Account <span aria-hidden className="text-red-600">*</span></label>
+          <label htmlFor="conn" className="text-xs font-medium">Account <span aria-hidden className="text-m-bad">*</span></label>
           {mine.length ? (
             <select
               id="conn"
-              className="w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm dark:border-neutral-700"
+              className="w-full rounded-lg border border-line-strong bg-field px-2 py-1.5 text-sm"
               value={node.connection_id ?? ""}
               onChange={(e) => changeAccount(e.target.value)}
             >
@@ -160,7 +160,7 @@ function NodeConfig({ workflowId, node, nodeType, siblings = [], published, last
           <label className="block space-y-1 text-xs font-medium">
             Resource
             <select
-              className="w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm font-normal dark:border-neutral-700"
+              className="w-full rounded-lg border border-line-strong bg-field px-2 py-1.5 text-sm font-normal"
               value={nodeType.resource ?? ""}
               onChange={(e) => {
                 const group = siblings.filter((s) => s.resource === e.target.value);
@@ -174,7 +174,7 @@ function NodeConfig({ workflowId, node, nodeType, siblings = [], published, last
           <label className="block space-y-1 text-xs font-medium">
             Operation
             <select
-              className="w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm font-normal dark:border-neutral-700"
+              className="w-full rounded-lg border border-line-strong bg-field px-2 py-1.5 text-sm font-normal"
               value={nodeType.type}
               onChange={(e) => switchOperation(e.target.value)}
             >
@@ -206,11 +206,11 @@ function NodeConfig({ workflowId, node, nodeType, siblings = [], published, last
         </p>
       )}
       {node.type === "webhook_trigger" && (
-        <div className="space-y-2 rounded-md border border-neutral-200 p-2 text-xs dark:border-neutral-800">
+        <div className="space-y-2 rounded-lg border border-m-line p-2 text-xs ">
           {published && trigger?.url ? (
             <>
               <p className="font-medium">Production URL</p>
-              <code className="block break-all rounded bg-neutral-100 p-1 dark:bg-neutral-800">{trigger.url}</code>
+              <code className="block break-all rounded bg-m-soft p-1 ">{trigger.url}</code>
               {trigger.has_secret && (
                 <>
                   <p>Send the secret in the <code>{trigger.secret_header}</code> header. It is shown only once.</p>
@@ -221,7 +221,7 @@ function NodeConfig({ workflowId, node, nodeType, siblings = [], published, last
                   >
                     Generate a new secret
                   </button>
-                  {secret && <code role="status" className="block break-all rounded bg-amber-100 p-1 text-amber-950">{secret}</code>}
+                  {secret && <code role="status" className="block break-all rounded bg-m-soft p-1 text-m-text">{secret}</code>}
                 </>
               )}
             </>
@@ -231,13 +231,13 @@ function NodeConfig({ workflowId, node, nodeType, siblings = [], published, last
         </div>
       )}
 
-      <div className="space-y-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+      <div className="space-y-2 border-t border-m-line pt-3 ">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             disabled={testing || nodeType?.category === "trigger"}
             onClick={() => void runTest(false)}
-            className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
+            className="rounded-full bg-m-ink px-4 py-1.5 text-[13px] font-medium text-m-ink-fg disabled:opacity-50"
           >
             {testing ? "Testing…" : "Test node"}
           </button>
@@ -245,26 +245,26 @@ function NodeConfig({ workflowId, node, nodeType, siblings = [], published, last
             <input type="checkbox" checked={Boolean(node.disabled)} onChange={(e) => void onApply([{ op: "update_node", id: node.id, disabled: e.target.checked }])} />
             Disabled
           </label>
-          <button type="button" onClick={() => onDeleteNode(node.id)} className="ml-auto text-xs text-red-700 underline dark:text-red-400">
+          <button type="button" onClick={() => onDeleteNode(node.id)} className="ml-auto text-xs text-m-bad underline">
             Delete node
           </button>
         </div>
-        {nodeType?.category === "trigger" && <p className="text-xs text-neutral-600">Triggers start a run; use Run workflow.</p>}
+        {nodeType?.category === "trigger" && <p className="text-xs text-m-muted">Triggers start a run; use Run workflow.</p>}
         {needsConfirm && (
-          <div role="alert" className="space-y-2 rounded-md bg-amber-50 p-2 text-sm text-amber-950 dark:bg-amber-950 dark:text-amber-100">
+          <div role="alert" className="space-y-2 rounded-lg border border-m-warn/40 bg-m-soft p-2 text-sm text-m-text">
             <p>{needsConfirm}</p>
-            <button type="button" onClick={() => void runTest(true)} className="rounded-md bg-amber-700 px-2 py-1 text-xs font-medium text-white">
+            <button type="button" onClick={() => void runTest(true)} className="rounded-full bg-m-ink px-3 py-1 text-xs font-medium text-m-ink-fg">
               Run it for real
             </button>
           </div>
         )}
-        {testError && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{testError}</p>}
-        {shownError && <p role="alert" className="text-sm text-red-700 dark:text-red-400">Error: {shownError.message ?? "The node failed."}</p>}
+        {testError && <p role="alert" className="text-sm text-m-bad">{testError}</p>}
+        {shownError && <p role="alert" className="text-sm text-m-bad">Error: {shownError.message ?? "The node failed."}</p>}
         {shownOutput && Object.entries(shownOutput).map(([k, items]) => (
           <Items key={k} title={`${test ? "Test output" : "Last run"}${k === "main" ? "" : ` · ${k}`}`} items={items} />
         ))}
         {!shownOutput && !shownError && !testError && !needsConfirm && (
-          <p className="text-xs text-neutral-600 dark:text-neutral-400">No output yet. Press Test node to run just this node with real data.</p>
+          <p className="text-xs text-m-muted">No output yet. Press Test node to run just this node with real data.</p>
         )}
       </div>
     </aside>

@@ -7,20 +7,23 @@ import { ActionCard } from "@/components/ActionCard";
 import { ApprovalPrompt } from "@/components/ApprovalPrompt";
 import { CopyButton, Markdown } from "@/components/Markdown";
 import { ModeIcon, SLASH_MENU_ID, SlashMenu, optionId } from "@/components/SlashMenu";
+import { CalendarDays, Mic, Paperclip, Search, Sliders, Sparkles, Workflow } from "lucide-react";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Field";
+import { Chip, Glyph, Kbd, Popover, ThinkingDots } from "@/components/ui/kit";
 import { BrainIcon, CloseIcon, PencilIcon, RefreshIcon, SendIcon, StopIcon } from "@/components/ui/icons";
 import { applyEvent, chatApi, itemsFromDetail, type ChatItem } from "@/lib/chat";
-import { CHAT_CHANGED, CHAT_DELETED, CHAT_NEW, CHAT_OPEN, emit, on } from "@/lib/chatBus";
+import { CHAT_CHANGED, CHAT_DELETED, CHAT_MODE_IS, CHAT_NEW, CHAT_OPEN, CHAT_SET_MODE, emit, on } from "@/lib/chatBus";
 import { connectionsApi } from "@/lib/connections";
+import { memoryApi } from "@/lib/memory";
+import { useUser } from "@/lib/useUser";
 import { DEFAULT_MODE, exactMode, filterModes, nextIndex, slashQuery, type ChatMode } from "@/lib/modes";
 import type { SseEvent } from "@/lib/sse";
 
 const SUGGESTIONS = [
-  "List my Google Sheets",
-  "Find my Notion pages about the roadmap",
-  "Summarize my open Linear issues",
-  "Draft a workflow that posts new Stripe payments to Slack",
+  { icon: Search, title: "Search my files", text: "Find a document, sheet or page across my connected apps.", prompt: "Search my files for the Q4 planning sheet" },
+  { icon: Workflow, title: "Build a workflow", text: "Describe an automation and get a draft on the canvas.", prompt: "Build a workflow that posts new Stripe payments to Slack" },
+  { icon: CalendarDays, title: "Check my calendar", text: "See what is coming up this week.", prompt: "What is on my calendar this week?" },
 ];
 
 const isAbort = (e: unknown) => (e as { name?: string } | null)?.name === "AbortError";
@@ -55,6 +58,10 @@ export function ChatWindow() {
   const [menuIndex, setMenuIndex] = useState(0);
   const [menuClosed, setMenuClosed] = useState(false);   // Esc closes the menu until the text changes
   const [editing, setEditing] = useState<{ index: number; text: string } | null>(null);
+  const [menu, setMenu] = useState<"mode" | "options" | null>(null);
+  const [memoryOn, setMemoryOn] = useState<boolean | null>(null);   // loaded when Options is first opened
+  const user = useUser();
+  const wantedMode = search?.get("mode") ?? null;
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -115,6 +122,28 @@ export function ChatWindow() {
   }, [wanted, openConversation]);
   useEffect(() => on<string>(CHAT_OPEN, (id) => { if (id !== activeRef.current) void openConversation(id); }), [openConversation]);
   useEffect(() => on(CHAT_NEW, reset), [reset]);
+
+  // The sidebar's AI tools list drives the mode too: an event when already here, a ?mode= link from other pages.
+  useEffect(() => on<string>(CHAT_SET_MODE, (cmd) => {
+    const m = modesRef.current.find((x) => x.command === cmd);
+    if (m) setMode(m);
+  }), []);
+  const appliedMode = useRef<string | null>(null);
+  useEffect(() => {
+    if (!wantedMode || appliedMode.current === wantedMode) return;
+    const m = modes.find((x) => x.command === wantedMode);
+    if (m) { appliedMode.current = wantedMode; setMode(m); }
+  }, [wantedMode, modes]);
+  useEffect(() => { emit(CHAT_MODE_IS, mode.command); }, [mode]);
+
+  useEffect(() => {
+    if (menu !== "options" || memoryOn !== null) return;
+    memoryApi.list().then((r) => setMemoryOn(r.enabled), () => undefined);
+  }, [menu, memoryOn]);
+  async function toggleMemory(on: boolean) {
+    setMemoryOn(on);
+    try { await memoryApi.setEnabled(on); } catch (e) { setMemoryOn(!on); setError((e as Error).message); }
+  }
   useEffect(() => on<string>(CHAT_DELETED, (id) => { if (id === activeRef.current) reset(); }), [reset]);
 
   async function consume(stream: AsyncGenerator<SseEvent>) {
@@ -246,36 +275,38 @@ export function ChatWindow() {
   const empty = items.length === 0;
 
   return (
-    <section aria-label="Chat" className="relative flex h-[calc(100dvh-3.5rem)] flex-col md:h-dvh">
-      <div role="log" aria-live="polite" aria-busy={busy} className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-6 px-4 pb-6 pt-8 sm:px-6">
-          {error && <p role="alert" className="text-sm text-bad">{error}</p>}
+    <section aria-label="Chat" className="relative flex h-full min-h-0 flex-col">
+      <div role="log" aria-live="polite" aria-busy={busy} className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col gap-6 px-4 pb-6 pt-4 sm:px-6">
+          {error && <p role="alert" className="text-[13px] text-bad">{error}</p>}
 
           {empty && (
-            <div className="my-auto flex flex-col items-center gap-8 py-10 text-center anim-fade-up">
+            <div className="m-in my-auto flex flex-col items-center py-10 text-center">
               {connected === false ? (
                 <div className="max-w-md">
-                  <h2 className="text-2xl font-semibold tracking-tight">Connect an app to get started</h2>
-                  <p className="mt-2 text-sm text-muted">
+                  <Glyph size={56} />
+                  <h2 className="mt-6 text-2xl font-semibold tracking-tight">Connect an app to get started</h2>
+                  <p className="mt-2 text-[13px] text-m-muted">
                     The assistant works through the apps you connect, like Google Sheets, Slack or Notion.
                   </p>
                   <Link href="/connections"
-                    className="mt-5 inline-flex h-10 items-center rounded-lg bg-accent px-5 text-sm font-medium text-accent-fg hover:opacity-85">
+                    className="mt-5 inline-flex h-10 items-center rounded-full bg-m-ink px-5 text-[13px] font-medium text-m-ink-fg hover:opacity-90">
                     Go to Connections
                   </Link>
                 </div>
               ) : (
                 <>
-                  <div>
-                    <h2 className="text-gradient text-3xl font-semibold tracking-tight">What can I do for you?</h2>
-                    <p className="mt-2 text-sm text-muted">Ask in plain language. Type / to pick an app or build a workflow.</p>
-                  </div>
-                  <ul aria-label="Suggested prompts" className="grid w-full gap-2 sm:grid-cols-2">
-                    {SUGGESTIONS.map((s) => (
-                      <li key={s}>
-                        <button type="button" onClick={() => { setInput(s); inputRef.current?.focus(); }}
-                          className="h-full w-full glass rounded-2xl px-4 py-3 text-left text-sm text-muted transition-colors hover:text-foreground hover:!border-line-strong">
-                          {s}
+                  <Glyph size={64} />
+                  <h1 className="mt-8 text-[34px] font-semibold leading-tight tracking-tight">Welcome, {user.firstName}</h1>
+                  <p className="mt-2 text-sm text-m-muted">How can I help you today?</p>
+                  <ul aria-label="Suggested prompts" className="mt-10 grid w-full gap-3 sm:grid-cols-3">
+                    {SUGGESTIONS.map(({ icon: Icon, title, text, prompt }) => (
+                      <li key={title}>
+                        <button type="button" onClick={() => { setInput(prompt); inputRef.current?.focus(); }}
+                          className="h-full w-full rounded-2xl border border-m-line bg-m-panel p-4 text-left shadow-[var(--m-shadow)] transition-colors duration-150 hover:border-m-line-strong">
+                          <span className="flex size-8 items-center justify-center rounded-lg bg-m-accent-soft text-m-accent"><Icon size={16} strokeWidth={1.75} aria-hidden /></span>
+                          <span className="mt-4 block text-[13px] font-medium">{title}</span>
+                          <span className="mt-1 block text-xs leading-5 text-m-muted">{text}</span>
                         </button>
                       </li>
                     ))}
@@ -288,8 +319,7 @@ export function ChatWindow() {
           {segments.map((seg) => {
             if (seg.type === "tools") {
               return (
-                <ol key={`t${seg.entries[0].index}`} aria-label="Tool calls"
-                  className="ml-1 space-y-2 border-l border-line">
+                <ol key={`t${seg.entries[0].index}`} aria-label="Tool calls" className="space-y-2">
                   {seg.entries.map(({ item, index }) => (
                     <ActionCard key={item.id || index} label={item.label} status={item.status} summary={item.summary}
                       action={item.action} input={item.input} output={item.output} durationMs={item.duration_ms}
@@ -316,7 +346,7 @@ export function ChatWindow() {
                       </div>
                     ) : (
                       <>
-                        <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-gradient-to-br from-indigo-600 to-violet-600 px-4 py-2.5 text-[15px] leading-7 text-white shadow-md">{item.text}</p>
+                        <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-m-soft px-4 py-2.5 text-sm leading-6">{item.text}</p>
                         <div className="flex gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
                           <CopyButton text={item.text} label="Copy message" />
                           {canRewind && (
@@ -337,7 +367,7 @@ export function ChatWindow() {
                       <CopyButton text={item.text} label="Copy reply" />
                       {canRewind && index === lastAssistantIndex && lastUserIndex >= 0 && (
                         <button type="button" onClick={() => void resendFrom(lastUserIndex, (items[lastUserIndex] as { text: string }).text)}
-                          className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-muted hover:bg-surface-2 hover:text-foreground">
+                          className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs text-m-muted hover:bg-m-soft hover:text-m-text">
                           <RefreshIcon width={14} height={14} /> Regenerate
                         </button>
                       )}
@@ -348,7 +378,7 @@ export function ChatWindow() {
                 return (
                   <div key={index}>
                     <Link href="/memory"
-                      className="inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs text-muted hover:border-line-strong hover:text-foreground">
+                      className="inline-flex items-center gap-1.5 rounded-full border border-m-line px-2.5 py-1 text-xs text-m-muted hover:border-m-line-strong hover:text-m-text">
                       <BrainIcon width={13} height={13} /> Memory used
                       <span className="sr-only"> ({item.count} {item.count === 1 ? "item" : "items"}), open Memory</span>
                     </Link>
@@ -359,8 +389,8 @@ export function ChatWindow() {
                   onDecide={(approve) => decide(item.approval.approval_id, approve)} />;
               case "error":
                 return (
-                  <div key={index} role="alert" className="glass rounded-2xl !border-bad/50 p-3 text-sm">
-                    <p className="text-bad">{item.text}</p>
+                  <div key={index} role="alert" className="rounded-2xl border border-m-bad/40 bg-m-panel p-3 text-[13px]">
+                    <p className="text-m-bad">{item.text}</p>
                     {lastUserText && (
                       <Button size="sm" variant="secondary" className="mt-2" disabled={busy}
                         onClick={() => void send(undefined, lastUserText)}>Retry</Button>
@@ -371,55 +401,85 @@ export function ChatWindow() {
           })}
 
           {busy && !items.some((i) => i.kind === "tool" && i.status === "running") && items[items.length - 1]?.kind !== "assistant" && (
-            <div aria-hidden className="flex gap-1.5 px-1">
-              <span className="size-2 animate-pulse rounded-full bg-muted" />
-              <span className="size-2 animate-pulse rounded-full bg-muted [animation-delay:150ms]" />
-              <span className="size-2 animate-pulse rounded-full bg-muted [animation-delay:300ms]" />
-            </div>
+            <ThinkingDots />
           )}
           <div ref={endRef} />
         </div>
       </div>
 
-      <div className="border-t border-transparent bg-gradient-to-t from-[var(--background)] from-60% to-transparent px-4 pb-4 pt-2 sm:px-6">
+      <div className="px-4 pb-4 pt-2 sm:px-6">
         <form onSubmit={send} className="relative mx-auto w-full max-w-3xl">
           {menuOpen && <SlashMenu modes={matches} activeIndex={Math.min(menuIndex, Math.max(matches.length - 1, 0))} onPick={pickMode} onHover={setMenuIndex} />}
-          <div className="mb-2 flex items-center gap-2 text-xs">
-            <span data-testid="mode-chip" title={mode.description}
-              className="inline-flex items-center gap-1.5 glass rounded-full py-1 pl-2.5 pr-1.5 font-mono font-medium">
-              <ModeIcon mode={mode} size={14} />
-              Mode: /{mode.command}
-              {mode.kind !== "custom" && (
-                <button type="button" aria-label="Back to /custom" onClick={() => setMode(DEFAULT_MODE)}
-                  className="rounded-full p-0.5 text-muted hover:bg-surface-2 hover:text-foreground">
-                  <CloseIcon width={12} height={12} />
-                </button>
+          <div className="rounded-2xl border border-m-line-strong bg-m-panel p-3 shadow-[var(--m-shadow)] transition-colors duration-150 focus-within:border-m-accent focus-within:ring-2 focus-within:ring-m-accent/20">
+            <div className="flex items-start gap-2.5">
+              <Sparkles size={16} strokeWidth={1.75} aria-hidden className="mt-2 shrink-0 text-m-muted" />
+              <label htmlFor="chat-input" className="sr-only">Message</label>
+              <textarea ref={inputRef} id="chat-input" rows={1} value={input}
+                onChange={(e) => { setInput(e.target.value); setMenuClosed(false); setMenuIndex(0); }} onKeyDown={onKeyDown}
+                role="combobox" aria-autocomplete="list" aria-expanded={menuOpen} aria-controls={SLASH_MENU_ID}
+                aria-activedescendant={menuOpen && matches.length ? optionId(matches[Math.min(menuIndex, matches.length - 1)].command) : undefined}
+                placeholder={hasPending ? "Approve or reject the pending action first" : "Ask anything, or type / for commands…"}
+                disabled={busy || hasPending}
+                className="max-h-[200px] min-h-[36px] min-w-0 flex-1 resize-none bg-transparent py-1.5 text-sm leading-6 placeholder:text-m-muted focus:outline-none disabled:opacity-60" />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Chip icon={Paperclip} disabled title="Attachments are not available yet" aria-label="Attach (not available yet)">Attach</Chip>
+              <span data-testid="mode-chip" title={mode.description} className="relative inline-flex">
+                <Chip aria-haspopup="listbox" aria-expanded={menu === "mode"} onClick={() => setMenu(menu === "mode" ? null : "mode")}
+                  leading={<ModeIcon mode={mode} size={12} />} className={mode.kind !== "custom" ? "pr-8" : ""}>
+                  Mode <span className="font-mono text-m-text">/{mode.command}</span>
+                </Chip>
+                {mode.kind !== "custom" && (
+                  <button type="button" aria-label="Back to /custom" onClick={() => setMode(DEFAULT_MODE)}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-m-muted hover:bg-m-soft hover:text-m-text">
+                    <CloseIcon width={11} height={11} />
+                  </button>
+                )}
+                <Popover open={menu === "mode"} onClose={() => setMenu(null)} label="Choose a mode" className="bottom-full left-0 mb-2 w-72">
+                  <ul role="listbox" aria-label="Modes" className="max-h-64 overflow-y-auto">
+                    {modes.map((m) => (
+                      <li key={m.command} role="option" aria-selected={m.command === mode.command}>
+                        <button type="button" onClick={() => { setMode(m); setMenu(null); inputRef.current?.focus(); }}
+                          className="flex h-9 w-full items-center gap-2.5 rounded-xl px-2.5 text-left text-[13px] hover:bg-m-soft">
+                          <span className="flex w-6 justify-center"><ModeIcon mode={m} size={13} /></span>
+                          <span className="font-mono text-xs">/{m.command}</span>
+                          <span className="flex-1 truncate text-xs text-m-muted">{m.description}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </Popover>
+              </span>
+              <span className="relative inline-flex">
+                <Chip icon={Sliders} aria-haspopup="dialog" aria-expanded={menu === "options"} onClick={() => setMenu(menu === "options" ? null : "options")}>Options</Chip>
+                <Popover open={menu === "options"} onClose={() => setMenu(null)} label="Options" className="bottom-full left-0 mb-2 w-64 p-3">
+                  <p className="text-xs font-medium">Model</p>
+                  <p className="mt-1 text-[11px] text-m-muted">Set on the server (OPENAI_MODEL).</p>
+                  <label className="mt-3 flex cursor-pointer items-center justify-between text-[13px]">
+                    Memory
+                    <input type="checkbox" role="switch" aria-label="Memory" checked={memoryOn ?? false} disabled={memoryOn === null}
+                      onChange={(e) => void toggleMemory(e.target.checked)}
+                      className="relative h-5 w-9 cursor-pointer appearance-none rounded-full bg-m-line-strong transition-colors checked:bg-m-ink disabled:opacity-50 after:absolute after:left-0.5 after:top-0.5 after:size-4 after:rounded-full after:bg-m-panel after:transition-transform checked:after:translate-x-4" />
+                  </label>
+                  <p className="mt-1 text-[11px] text-m-muted">Remember short facts between chats.</p>
+                </Popover>
+              </span>
+              <span className="ml-auto" />
+              <IconButton label="Voice input (not available yet)" disabled><Mic size={16} strokeWidth={1.75} aria-hidden /></IconButton>
+              {busy ? (
+                <IconButton label="Stop generating" variant="primary" className="size-9" onClick={() => abortRef.current?.abort()}>
+                  <StopIcon width={14} height={14} />
+                </IconButton>
+              ) : (
+                <IconButton type="submit" label="Send" variant="primary" className="size-9" disabled={hasPending || !input.trim()}>
+                  <SendIcon width={16} height={16} />
+                </IconButton>
               )}
-            </span>
-            <span className="hidden text-muted sm:inline">Type / to switch mode</span>
+            </div>
           </div>
-          <div className="flex items-end gap-2 glass-strong rounded-3xl p-2 transition-shadow focus-within:!border-accent focus-within:ring-2 focus-within:ring-accent/25">
-            <label htmlFor="chat-input" className="sr-only">Message</label>
-            <textarea ref={inputRef} id="chat-input" rows={1} value={input}
-              onChange={(e) => { setInput(e.target.value); setMenuClosed(false); setMenuIndex(0); }} onKeyDown={onKeyDown}
-              role="combobox" aria-autocomplete="list" aria-expanded={menuOpen} aria-controls={SLASH_MENU_ID}
-              aria-activedescendant={menuOpen && matches.length ? optionId(matches[Math.min(menuIndex, matches.length - 1)].command) : undefined}
-              placeholder={hasPending ? "Approve or reject the pending action first" : "Ask the assistant to do something…"}
-              disabled={busy || hasPending}
-              className="max-h-[200px] min-h-11 min-w-0 flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] leading-6 placeholder:text-muted focus:outline-none disabled:opacity-60" />
-            {busy ? (
-              <IconButton label="Stop generating" variant="primary" className="size-10 rounded-xl"
-                onClick={() => abortRef.current?.abort()}>
-                <StopIcon width={16} height={16} />
-              </IconButton>
-            ) : (
-              <IconButton type="submit" label="Send" variant="primary" className="size-10 rounded-xl"
-                disabled={hasPending || !input.trim()}>
-                <SendIcon width={18} height={18} />
-              </IconButton>
-            )}
-          </div>
-          <p className="mt-2 text-center text-xs text-muted">Enter to send · Shift+Enter for a new line</p>
+          <p className="mt-2 flex items-center justify-center gap-3 text-[11px] text-m-muted">
+            <span><Kbd>↵</Kbd> send</span><span><Kbd>⇧↵</Kbd> new line</span><span><Kbd>/</Kbd> commands</span>
+          </p>
         </form>
       </div>
     </section>

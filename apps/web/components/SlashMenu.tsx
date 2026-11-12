@@ -23,13 +23,13 @@ export function SlashMenu({
 }) {
   return (
     <ul id={SLASH_MENU_ID} role="listbox" aria-label="Chat modes"
-      className="anim-pop absolute bottom-full left-0 right-0 z-10 mb-2 max-h-72 overflow-auto glass-strong rounded-2xl p-1.5">
-      {modes.length === 0 && <li className="px-3 py-2 text-sm text-muted">No mode matches. Press Enter to send it as text.</li>}
+      className="m-in absolute bottom-full left-0 right-0 z-10 mb-2 max-h-72 overflow-auto rounded-2xl border border-m-line bg-m-panel p-1.5 shadow-[var(--m-pop-shadow)]">
+      {modes.length === 0 && <li className="px-3 py-2 text-[13px] text-m-muted">No mode matches. Press Enter to send it as text.</li>}
       {modes.map((m, i) => (
         <li key={m.command} id={optionId(m.command)} role="option" aria-selected={i === activeIndex}
           onMouseEnter={() => onHover(i)}
           onMouseDown={(e) => { e.preventDefault(); onPick(m); }}
-          className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm ${i === activeIndex ? "bg-surface-2" : ""}`}>
+          className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-[13px] ${i === activeIndex ? "bg-m-soft" : ""}`}>
           <span className="flex size-6 shrink-0 items-center justify-center"><ModeIcon mode={m} /></span>
           <span className="font-mono font-medium">/{m.command}</span>
           <span className="truncate text-muted">{m.description}</span>

@@ -1,7 +1,7 @@
 import { forwardRef, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 const BASE =
-  "w-full rounded-xl border border-line-strong bg-field px-3 text-sm text-foreground placeholder:text-muted transition-colors duration-150 hover:border-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:opacity-50 aria-[invalid=true]:border-bad";
+  "w-full rounded-xl border border-m-line-strong bg-m-panel px-3 text-[13px] text-m-text placeholder:text-m-muted transition-colors duration-150 hover:border-m-muted focus-visible:border-m-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-m-accent/25 disabled:opacity-50 aria-[invalid=true]:border-m-bad";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(
   { className = "", ...rest }, ref,
@@ -23,9 +23,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
 
 export function Label({ htmlFor, children, hint }: { htmlFor: string; children: React.ReactNode; hint?: string }) {
   return (
-    <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium">
+    <label htmlFor={htmlFor} className="mb-1.5 block text-[13px] font-medium">
       {children}
-      {hint && <span className="ml-1 font-normal text-muted">{hint}</span>}
+      {hint && <span className="ml-1 font-normal text-m-muted">{hint}</span>}
     </label>
   );
 }

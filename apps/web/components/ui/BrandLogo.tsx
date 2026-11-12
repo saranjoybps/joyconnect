@@ -20,14 +20,14 @@ export function hasBrandIcon(id: string): boolean {
 }
 
 /**
- * A small glass tile with the app's mark in its official brand colour (Simple Icons hex). The tile is always a light
- * glass chip, so dark marks (GitHub, Notion) stay visible in the dark theme. Slack and Google Contacts are not in
- * Simple Icons: they get a gradient monogram, never a recreated logo.
+ * A small white tile with the app's mark in its official brand colour (Simple Icons hex). The tile is always a light
+ * chip, so dark marks (GitHub, Notion) stay visible in the dark theme. Slack and Google Contacts are not in
+ * Simple Icons: they get a neutral monogram, never a recreated logo.
  */
 export function BrandLogo({ id, name, size = 20, className = "" }: { id: string; name?: string; size?: number; className?: string }) {
   const icon = ICONS[id];
   const box = Math.round(size * 1.7);
-  const tile = `inline-flex shrink-0 items-center justify-center rounded-[28%] border border-white/70 bg-white/85 shadow-sm ${className}`;
+  const tile = `inline-flex shrink-0 items-center justify-center rounded-[28%] border border-black/[0.06] bg-white shadow-[0_1px_1px_rgba(0,0,0,0.06)] ${className}`;
   if (icon) {
     return (
       <span className={tile} style={{ width: box, height: box }}>
@@ -40,7 +40,7 @@ export function BrandLogo({ id, name, size = 20, className = "" }: { id: string;
   const letter = (name ?? id).trim().charAt(0).toUpperCase() || "?";
   return (
     <span aria-hidden data-testid="brand-fallback" style={{ width: box, height: box, fontSize: size * 0.8 }}
-      className={`btn-gradient inline-flex shrink-0 items-center justify-center rounded-[28%] font-semibold leading-none ${className}`}>
+      className={`inline-flex shrink-0 items-center justify-center rounded-[28%] bg-m-ink font-semibold leading-none text-m-ink-fg ${className}`}>
       {letter}
     </span>
   );

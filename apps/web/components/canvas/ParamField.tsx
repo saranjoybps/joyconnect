@@ -6,7 +6,7 @@ import type { JsonSchema } from "@/lib/workflows";
 import { OptionField, type OptionCtx } from "./OptionFields";
 
 const INPUT =
-  "w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm dark:border-neutral-700";
+  "w-full rounded-lg border border-line-strong bg-field px-2 py-1.5 text-sm";
 
 export function baseType(s: JsonSchema): string | undefined {
   if (Array.isArray(s.type)) return s.type.find((t) => t !== "null");
@@ -57,10 +57,10 @@ export function ParamField({
     <div className="space-y-1">
       <label htmlFor={id} className="text-xs font-medium capitalize">
         {label}
-        {required && <span aria-hidden className="text-red-600"> *</span>}
+        {required && <span aria-hidden className="text-m-bad"> *</span>}
       </label>
       {control}
-      {hint && <p className="text-xs text-neutral-600 dark:text-neutral-400">{hint}</p>}
+      {hint && <p className="text-xs text-m-muted">{hint}</p>}
     </div>
   );
 
@@ -173,13 +173,13 @@ function JsonField({
         rows={4}
         spellCheck={false}
         aria-invalid={bad}
-        className={`${INPUT} font-mono text-xs ${bad ? "border-red-500" : ""}`}
+        className={`${INPUT} font-mono text-xs ${bad ? "border-m-bad" : ""}`}
         value={text}
         placeholder="JSON"
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
       />
-      {bad && <p role="alert" className="text-xs text-red-700 dark:text-red-400">That is not valid JSON, so it was not saved.</p>}
+      {bad && <p role="alert" className="text-xs text-m-bad">That is not valid JSON, so it was not saved.</p>}
     </>,
   );
 }

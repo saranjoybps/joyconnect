@@ -22,7 +22,7 @@ export function NodePalette({ types, onAdd }: { types: NodeType[]; onAdd: (nt: N
   }, [types, q]);
 
   return (
-    <aside aria-label="Node palette" className="glass-lite flex h-full w-60 shrink-0 flex-col rounded-none border-y-0 border-l-0">
+    <aside aria-label="Node palette" className="flex h-full w-60 shrink-0 flex-col border-r border-m-line bg-m-window">
       <div className="p-2">
         <label htmlFor="palette-search" className="sr-only">Search nodes</label>
         <input
@@ -31,15 +31,15 @@ export function NodePalette({ types, onAdd }: { types: NodeType[]; onAdd: (nt: N
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search nodes…"
-          className="w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm dark:border-neutral-700"
+          className="w-full rounded-lg border border-line-strong bg-field px-2 py-1.5 text-sm"
         />
-        <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">Drag onto the canvas, or click to add.</p>
+        <p className="mt-1 text-xs text-m-muted">Drag onto the canvas, or click to add.</p>
       </div>
       <div className="flex-1 overflow-y-auto px-2 pb-3">
-        {groups.length === 0 && <p className="p-2 text-sm text-neutral-600">No node matches “{q}”.</p>}
+        {groups.length === 0 && <p className="p-2 text-sm text-m-muted">No node matches “{q}”.</p>}
         {groups.map(([cat, items]) => (
           <details key={cat} open={cat !== "app" || q !== ""} className="mb-2">
-            <summary className="cursor-pointer py-1 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
+            <summary className="cursor-pointer py-1 text-xs font-semibold uppercase tracking-wide text-m-muted">
               {TITLES[cat] ?? cat} <span className="font-normal">({items.length})</span>
             </summary>
             <ul className="space-y-1">
@@ -54,11 +54,11 @@ export function NodePalette({ types, onAdd }: { types: NodeType[]; onAdd: (nt: N
                       e.dataTransfer.effectAllowed = "move";
                     }}
                     onClick={() => onAdd(t)}
-                    className="flex w-full items-center justify-between gap-2 rounded-xl border border-line bg-field px-2 py-1.5 text-left text-sm hover:bg-surface-2"
+                    className="flex w-full items-center justify-between gap-2 rounded-xl border border-m-line bg-m-panel px-2.5 py-1.5 text-left text-[13px] hover:bg-m-soft"
                   >
                     <span className="truncate">{t.name}</span>
                     {t.risk !== "read" && !t.dynamic_risk && (
-                      <span className={`text-[10px] font-medium uppercase ${t.risk === "destructive" ? "text-red-700 dark:text-red-400" : "text-amber-800 dark:text-amber-300"}`}>
+                      <span className={`text-[10px] font-medium uppercase ${t.risk === "destructive" ? "text-m-bad" : "text-m-warn"}`}>
                         {t.risk}
                       </span>
                     )}

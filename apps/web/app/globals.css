@@ -4,230 +4,9 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ============================================================
-   Design tokens: colourful glassmorphism, light and dark.
-   Every text/background pair used by the app is checked for WCAG AA (see README, scripts/contrast.mjs).
-   ============================================================ */
-:root {
-  /* base + text */
-  --background: #f3f2ff;
-  --foreground: #1b1a3a;
-  --muted: #55587a;
-  /* surfaces */
-  --surface: rgba(255, 255, 255, 0.55);
-  --surface-2: rgba(99, 102, 241, 0.09);
-  --field: rgba(255, 255, 255, 0.72);
-  --border: rgba(99, 102, 241, 0.2);
-  --border-strong: rgba(79, 70, 229, 0.38);
-  /* brand */
-  --accent: #4f46e5;
-  --accent-fg: #ffffff;
-  --ring: #4f46e5;
-  --grad-from: #4f46e5;  /* indigo */
-  --grad-via: #7c3aed;   /* violet */
-  --grad-to: #0e7490;    /* cyan (700 keeps white text AA) */
-  /* status: emerald, amber, rose, sky */
-  --success: #047857;
-  --warning: #92400e;
-  --error: #be123c;
-  --info: #0369a1;
-  /* glass */
-  --glass-bg: rgba(255, 255, 255, 0.66);
-  --glass-bg-strong: rgba(255, 255, 255, 0.86);
-  --glass-solid: #f8f7ff;           /* fallback without backdrop-filter */
-  --glass-border: rgba(255, 255, 255, 0.7);
-  --glass-highlight: rgba(255, 255, 255, 0.9);
-  --glass-shadow: 0 1px 2px rgba(49, 46, 129, 0.06), 0 8px 24px -6px rgba(79, 70, 229, 0.16), 0 24px 48px -16px rgba(79, 70, 229, 0.14);
-  --glass-blur: 18px;
-  --aurora-a: rgba(129, 140, 248, 0.42);
-  --aurora-b: rgba(196, 181, 253, 0.5);
-  --aurora-c: rgba(103, 232, 249, 0.34);
-  --radius: 1rem;
-  --ease: cubic-bezier(0.2, 0, 0, 1);
-  color-scheme: light;
-}
-
-.dark {
-  --background: #0a0f24;
-  --foreground: #eceaff;
-  --muted: #a9acd0;
-  --surface: rgba(255, 255, 255, 0.06);
-  --surface-2: rgba(167, 139, 250, 0.14);
-  --field: rgba(255, 255, 255, 0.07);
-  --border: rgba(167, 139, 250, 0.24);
-  --border-strong: rgba(167, 139, 250, 0.5);
-  --ring: #a5b4fc;
-  --success: #34d399;
-  --warning: #fbbf24;
-  --error: #fda4af;
-  --info: #38bdf8;
-  --glass-bg: rgba(22, 26, 60, 0.58);
-  --glass-bg-strong: rgba(18, 22, 52, 0.86);
-  --glass-solid: #141838;
-  --glass-border: rgba(196, 181, 253, 0.2);
-  --glass-highlight: rgba(255, 255, 255, 0.12);
-  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -8px rgba(0, 0, 0, 0.55), 0 28px 56px -20px rgba(91, 33, 182, 0.4);
-  --aurora-a: rgba(99, 102, 241, 0.34);
-  --aurora-b: rgba(139, 92, 246, 0.34);
-  --aurora-c: rgba(34, 211, 238, 0.2);
-  color-scheme: dark;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-field: var(--field);
-  --color-line: var(--border);
-  --color-line-strong: var(--border-strong);
-  --color-muted: var(--muted);
-  --color-accent: var(--accent);
-  --color-accent-fg: var(--accent-fg);
-  --color-ok: var(--success);
-  --color-warn: var(--warning);
-  --color-bad: var(--error);
-  --color-info: var(--info);
-  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-}
-
-/* Older components use neutral-*, red-* and blue-*: retint them to the lavender, rose and indigo palette. */
-@theme {
-  --color-neutral-50: #f7f6ff;
-  --color-neutral-100: #eeecfd;
-  --color-neutral-200: #dedbf7;
-  --color-neutral-300: #c5c1ea;
-  --color-neutral-400: #9a9ec6;
-  --color-neutral-500: #62668a;
-  --color-neutral-600: #4d5070;
-  --color-neutral-700: #3a3c5a;
-  --color-neutral-800: #272845;
-  --color-neutral-900: #171832;
-  --color-neutral-950: #0d0e24;
-  --color-red-50: #fff1f2;
-  --color-red-100: #ffe4e6;
-  --color-red-300: #fda4af;
-  --color-red-400: #fb7185;
-  --color-red-500: #f43f5e;
-  --color-red-600: #e11d48;
-  --color-red-700: #be123c;
-  --color-red-800: #9f1239;
-  --color-red-900: #881337;
-  --color-red-950: #4c0519;
-  --color-blue-400: #818cf8;
-  --color-blue-700: #4338ca;
-}
-
-html { background: var(--background); }
-
-body {
-  background: transparent;
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
-}
-
-/* ---- Aurora: a slow mesh gradient behind the app (one fixed, GPU-composited layer) ---- */
-body::before {
-  content: "";
-  position: fixed;
-  inset: -20%;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(40% 35% at 18% 20%, var(--aurora-a), transparent 70%),
-    radial-gradient(38% 40% at 82% 16%, var(--aurora-b), transparent 70%),
-    radial-gradient(45% 40% at 70% 85%, var(--aurora-c), transparent 70%),
-    radial-gradient(35% 35% at 10% 80%, var(--aurora-b), transparent 70%);
-  animation: aurora 48s ease-in-out infinite alternate;
-  will-change: transform;
-}
-@keyframes aurora {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to { transform: translate3d(3%, -2%, 0) scale(1.08) rotate(2deg); }
-}
-
-/* ---- Glass surfaces ---- */
-.glass {
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
-}
-.glass-strong {
-  background: var(--glass-bg-strong);
-  -webkit-backdrop-filter: blur(24px) saturate(170%);
-  backdrop-filter: blur(24px) saturate(170%);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
-}
-/* Translucent but not blurred: for nodes and panels over the workflow canvas, so panning stays smooth. */
-.glass-lite {
-  background: var(--glass-bg-strong);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 1px 2px rgba(49, 46, 129, 0.1), 0 6px 16px -6px rgba(79, 70, 229, 0.25), inset 0 1px 0 var(--glass-highlight);
-}
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass, .glass-strong { background: var(--glass-solid); }
-}
-
-.btn-gradient {
-  background-image: linear-gradient(120deg, var(--grad-from), var(--grad-via) 55%, var(--grad-to));
-  color: #fff;
-  box-shadow: 0 6px 16px -6px rgba(99, 102, 241, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  transition: filter 150ms var(--ease), transform 150ms var(--ease);
-}
-.btn-gradient:hover { filter: brightness(1.1) saturate(1.05); }
-.btn-gradient:active { transform: translateY(1px); }
-.text-gradient {
-  background-image: linear-gradient(120deg, var(--grad-from), var(--grad-via) 55%, var(--grad-to));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-/* Legacy solid "primary" buttons (neutral-900 / neutral-100) get the gradient too. */
-.bg-neutral-900.text-white, .dark .dark\:bg-neutral-100.dark\:text-neutral-900 {
-  background-image: linear-gradient(120deg, var(--grad-from), var(--grad-via) 55%, var(--grad-to));
-  color: #fff;
-}
-
-/* Visible keyboard focus everywhere. */
-:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
-@keyframes fade-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-@keyframes pop { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
-.anim-fade-up { animation: fade-up 180ms var(--ease) both; }
-.anim-pop { animation: pop 160ms var(--ease) both; }
-.skeleton {
-  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 37%, var(--surface-2) 63%);
-  background-size: 400% 100%;
-  animation: shimmer 1.4s ease infinite;
-}
-
-/* React Flow: transparent canvas so the aurora shows, glass-lite controls. */
-.react-flow { background: transparent !important; }
-.react-flow__controls-button { background: var(--glass-bg-strong) !important; color: var(--foreground) !important; border-color: var(--border) !important; }
-.react-flow__edge-path { stroke: var(--border-strong) !important; }
-.react-flow__handle { background: var(--accent) !important; border-color: var(--glass-solid) !important; }
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
-  body::before { animation: none; }
-}
-
-/* Gradient headings need lighter stops on navy to stay readable. */
-.dark .text-gradient {
-  background-image: linear-gradient(120deg, #a5b4fc, #c4b5fd 55%, #67e8f9);
-}
-
-/* ============================================================
-   MINIMAL tokens (--m-*): off-white / near-black window floating on a soft gradient page.
+   MINIMAL design tokens (--m-*): an off-white / near-black window floating on a soft gradient page.
    Neutral palette, one soft accent used sparingly, desaturated status colours, hairline borders.
-   No glass, no glow. Components in components/min/. Contrast is checked by scripts/contrast-min.mjs.
+   No glass, no glow. Contrast is checked by scripts/contrast-min.mjs (npm run contrast).
    ============================================================ */
 :root, .light {
   --m-page: linear-gradient(140deg, #f5d9c9 0%, #ecdcec 52%, #d9d7f4 100%);
@@ -252,6 +31,9 @@ body::before {
   --m-pop-shadow: 0 2px 6px rgba(20, 20, 24, 0.06), 0 16px 40px -10px rgba(20, 20, 24, 0.22);
   --m-dot: rgba(20, 20, 24, 0.14);
   --m-canvas: #f6f5f2;
+  --m-overlay: rgba(20, 20, 24, 0.35);
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  color-scheme: light;
 }
 .dark {
   --m-page: linear-gradient(140deg, #16161a 0%, #1a1a2c 55%, #25233f 100%);
@@ -276,9 +58,12 @@ body::before {
   --m-pop-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), 0 16px 40px -10px rgba(0, 0, 0, 0.7);
   --m-dot: rgba(255, 255, 255, 0.12);
   --m-canvas: #0a0a0d;
+  --m-overlay: rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
 }
 
 @theme inline {
+  /* the minimal palette */
   --color-m-window: var(--m-window);
   --color-m-panel: var(--m-panel);
   --color-m-soft: var(--m-soft);
@@ -296,19 +81,85 @@ body::before {
   --color-m-bad: var(--m-bad);
   --color-m-info: var(--m-info);
   --color-m-canvas: var(--m-canvas);
+  /* short semantic names used across the app, all pointing at the same palette */
+  --color-background: var(--m-window);
+  --color-foreground: var(--m-text);
+  --color-surface: var(--m-soft);
+  --color-surface-2: var(--m-soft);
+  --color-field: var(--m-panel);
+  --color-line: var(--m-line);
+  --color-line-strong: var(--m-line-strong);
+  --color-muted: var(--m-muted);
+  --color-accent: var(--m-ink);
+  --color-accent-fg: var(--m-ink-fg);
+  --color-ok: var(--m-ok);
+  --color-warn: var(--m-warn);
+  --color-bad: var(--m-bad);
+  --color-info: var(--m-info);
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
+
+/* Any leftover neutral-* / red-* / blue-* utilities resolve to the quiet neutral scale. */
+@theme {
+  --color-neutral-50: #faf9f7;
+  --color-neutral-100: #f3f2ef;
+  --color-neutral-200: #e6e5e1;
+  --color-neutral-300: #d0cfcb;
+  --color-neutral-400: #a1a1a8;
+  --color-neutral-500: #6b6b74;
+  --color-neutral-600: #55555d;
+  --color-neutral-700: #3b3b42;
+  --color-neutral-800: #26262b;
+  --color-neutral-900: #141416;
+  --color-neutral-950: #0c0c0f;
+  --color-red-50: #fbefee;
+  --color-red-100: #f6dcda;
+  --color-red-300: #e5a29e;
+  --color-red-400: #e5837e;
+  --color-red-500: #cc5a55;
+  --color-red-600: #ae403c;
+  --color-red-700: #963632;
+  --color-red-800: #7d2e2b;
+  --color-red-900: #632523;
+  --color-red-950: #3d1514;
+  --color-blue-400: #7bafdc;
+  --color-blue-700: #2e6593;
+}
+
+html { background: var(--m-window); }
+body { background: transparent; color: var(--m-text); font-family: var(--font-geist-sans), system-ui, sans-serif; font-size: 14px; }
 
 .m-page { background: var(--m-page); }
 .m-dots { background-color: var(--m-canvas); background-image: radial-gradient(var(--m-dot) 1px, transparent 1px); background-size: 20px 20px; }
+
+/* Visible keyboard focus everywhere. */
+:focus-visible { outline: 2px solid var(--m-accent); outline-offset: 2px; }
 
 @keyframes m-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 @keyframes m-pulse { 0%, 100% { opacity: 0.35; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1); } }
 @keyframes m-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 @keyframes m-spin { to { transform: rotate(360deg); } }
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .m-cursor { display: inline-block; width: 6px; height: 1.05em; margin-left: 2px; vertical-align: text-bottom; border-radius: 1px; background: var(--m-text); animation: m-blink 1s steps(1) infinite; }
 .m-dot { animation: m-pulse 1.2s ease-in-out infinite; }
-.m-in { animation: m-in 150ms cubic-bezier(0.2, 0, 0, 1) both; }
+.m-in { animation: m-in 150ms var(--ease) both; }
 .m-spin { animation: m-spin 0.9s linear infinite; }
+.skeleton {
+  background: linear-gradient(90deg, var(--m-soft) 25%, var(--m-soft-2) 37%, var(--m-soft) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+/* React Flow: light dotted-grid canvas, slim controls, hairline edges. */
+.react-flow { background: transparent !important; }
+.react-flow__controls { box-shadow: var(--m-shadow) !important; border-radius: 12px; overflow: hidden; border: 1px solid var(--m-line); }
+.react-flow__controls-button { background: var(--m-panel) !important; color: var(--m-text) !important; border-color: var(--m-line) !important; fill: currentColor; }
+.react-flow__edge-path { stroke: var(--m-line-strong) !important; stroke-width: 1.5; }
+.react-flow__handle { background: var(--m-panel) !important; border: 1.5px solid var(--m-muted) !important; }
+.react-flow__attribution { display: none; }
+
 @media (prefers-reduced-motion: reduce) {
-  .m-cursor, .m-dot, .m-spin { animation: none; }
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  .m-cursor, .m-dot, .m-spin, .skeleton { animation: none; }
 }

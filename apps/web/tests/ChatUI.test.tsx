@@ -88,8 +88,8 @@ describe("ChatWindow composer", () => {
   it("shows suggested prompts on an empty chat that fill the composer", async () => {
     render(<ChatWindow />);
     const box = await screen.findByRole("combobox", { name: "Message" });
-    await userEvent.click(await screen.findByRole("button", { name: "List my Google Sheets" }));
-    expect(box).toHaveValue("List my Google Sheets");
+    await userEvent.click(await screen.findByRole("button", { name: /Search my files/ }));
+    expect(box).toHaveValue("Search my files for the Q4 planning sheet");
   });
 
   it("Enter sends and Shift+Enter inserts a new line", async () => {

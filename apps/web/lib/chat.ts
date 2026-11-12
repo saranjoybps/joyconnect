@@ -46,7 +46,7 @@ export type ChatItem =
   | { kind: "approval"; approval: ApprovalPreview; state: "pending" | "submitting" | "approved" | "rejected" }
   | { kind: "error"; text: string };
 
-export type Conversation = { id: string; title: string | null; created_at: string };
+export type Conversation = { id: string; title: string | null; created_at: string; preview?: string };
 
 export type ConversationDetail = {
   id: string;

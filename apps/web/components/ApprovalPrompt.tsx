@@ -20,7 +20,7 @@ export function ApprovalPrompt({ approval, state, onDecide }: Props) {
   const destructive = approval.risk === "destructive";
   return (
     <section aria-labelledby={titleId}
-      className={`anim-fade-up glass rounded-2xl p-4 ${destructive ? "!border-bad/60" : "!border-warn/60"}`}>
+      className={`m-in rounded-2xl border bg-m-panel p-4 shadow-[var(--m-shadow)] ${destructive ? "border-m-bad/50" : "border-m-line-strong"}`}>
       <div className="flex flex-wrap items-center gap-2">
         <h3 id={titleId} className="font-medium">
           Approve: {approval.connector_name} · {approval.action}

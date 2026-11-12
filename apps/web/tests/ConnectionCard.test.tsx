@@ -74,10 +74,11 @@ describe("integration cards", () => {
     expect(screen.getByRole("button", { name: "Connect GitHub" })).toBeInTheDocument();
   });
 
-  it("Connected: status, account count, Manage", () => {
+  it("Connected: Manage, and the card holds only the name and the button (state is for screen readers)", () => {
     card(ready, [conn()]);
-    expect(screen.getByText("Connected")).toBeInTheDocument();
-    expect(screen.getByText(/1 account · octocat/)).toBeInTheDocument();
+    expect(screen.getByText("Connected")).toHaveClass("sr-only");
+    expect(screen.queryByText(/octocat/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Issues")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Manage GitHub" })).toBeInTheDocument();
   });
 

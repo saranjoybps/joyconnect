@@ -53,13 +53,13 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
-      <div aria-hidden className="absolute inset-0 bg-[#0a0f24]/45" onClick={onClose} />
+      <div aria-hidden className="absolute inset-0 bg-[var(--m-overlay)]" onClick={onClose} />
       <div ref={ref} role={alert ? "alertdialog" : "dialog"} aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descId : undefined}
         tabIndex={-1}
-        className={`anim-pop relative flex max-h-[92dvh] w-full flex-col glass-strong rounded-t-2xl sm:rounded-2xl ${size === "lg" ? "sm:max-w-2xl" : "sm:max-w-lg"}`}>
+        className={`m-in relative flex max-h-[92dvh] w-full flex-col rounded-t-3xl border border-m-line bg-m-panel text-m-text shadow-[var(--m-pop-shadow)] sm:rounded-3xl ${size === "lg" ? "sm:max-w-2xl" : "sm:max-w-lg"}`}>
         <div className="border-b border-line px-6 py-4">
-          <h2 id={titleId} className="text-base font-semibold">{title}</h2>
-          {description && <p id={descId} className="mt-1 text-sm text-muted">{description}</p>}
+          <h2 id={titleId} className="text-[15px] font-semibold tracking-tight">{title}</h2>
+          {description && <p id={descId} className="mt-1 text-[13px] text-muted">{description}</p>}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
         {footer && <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-6 py-4">{footer}</div>}
