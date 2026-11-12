@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PageHeader } from "@/components/ui/Card";
 import { formatDuration, formatJson, runsApi, type Run, type RunsPage } from "@/lib/runs";
 
 const PAGE_SIZE = 25;
@@ -24,7 +25,7 @@ function when(iso: string | null): string {
 
 export function RunRow({ run }: { run: Run }) {
   return (
-    <li className="rounded-lg border border-neutral-200 dark:border-neutral-800">
+    <li className="glass rounded-2xl">
       <details>
         <summary className="grid cursor-pointer grid-cols-2 items-center gap-x-3 gap-y-1 p-3 text-sm sm:grid-cols-[11rem_9rem_1fr_6rem_6rem_5rem]">
           <span className="text-neutral-600 dark:text-neutral-400">{when(run.created_at)}</span>
@@ -71,16 +72,12 @@ export function RunsView() {
   }, [connector, status, offset]);
 
   const total = data?.total ?? 0;
-  const select = "rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700";
+  const select = "rounded-xl border border-line-strong bg-field px-2 py-1.5 text-sm";
 
   return (
     <section aria-labelledby="runs-title" className="space-y-4">
-      <div>
-        <h1 id="runs-title" className="text-xl font-semibold">Runs</h1>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          Every tool call the assistant made for you. Inputs and outputs have secrets redacted. Shows your most recent 500 runs.
-        </p>
-      </div>
+      <PageHeader id="runs-title" title="Runs"
+        description="Every tool call the assistant made for you. Inputs and outputs have secrets redacted. Shows your most recent 500 runs." />
 
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm">
@@ -103,7 +100,7 @@ export function RunsView() {
       {error && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{error}</p>}
       {!data && !error && <p className="text-sm text-neutral-500">Loading…</p>}
       {data && data.runs.length === 0 && (
-        <p className="rounded-lg border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-400">
+        <p className="glass rounded-2xl border-dashed p-6 text-center text-sm text-muted">
           No runs match. Ask the assistant to do something in Chat and it will show up here.
         </p>
       )}
@@ -116,10 +113,10 @@ export function RunsView() {
           <ul className="space-y-2">{data.runs.map((r) => <RunRow key={r.id} run={r} />)}</ul>
           <div className="flex items-center gap-3 text-sm">
             <button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              className="rounded-md border border-neutral-300 px-3 py-1 disabled:opacity-50 dark:border-neutral-700">Previous</button>
+              className="rounded-xl border border-line-strong bg-field px-3 py-1 disabled:opacity-50">Previous</button>
             <span>{offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}</span>
             <button type="button" disabled={offset + PAGE_SIZE >= total} onClick={() => setOffset(offset + PAGE_SIZE)}
-              className="rounded-md border border-neutral-300 px-3 py-1 disabled:opacity-50 dark:border-neutral-700">Next</button>
+              className="rounded-xl border border-line-strong bg-field px-3 py-1 disabled:opacity-50">Next</button>
           </div>
         </>
       )}

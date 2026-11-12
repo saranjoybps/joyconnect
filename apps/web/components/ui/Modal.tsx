@@ -53,10 +53,10 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
-      <div aria-hidden className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+      <div aria-hidden className="absolute inset-0 bg-[#0a0f24]/45" onClick={onClose} />
       <div ref={ref} role={alert ? "alertdialog" : "dialog"} aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descId : undefined}
         tabIndex={-1}
-        className={`anim-pop relative flex max-h-[92dvh] w-full flex-col rounded-t-2xl border border-line bg-background shadow-2xl sm:rounded-2xl ${size === "lg" ? "sm:max-w-2xl" : "sm:max-w-lg"}`}>
+        className={`anim-pop relative flex max-h-[92dvh] w-full flex-col glass-strong rounded-t-2xl sm:rounded-2xl ${size === "lg" ? "sm:max-w-2xl" : "sm:max-w-lg"}`}>
         <div className="border-b border-line px-6 py-4">
           <h2 id={titleId} className="text-base font-semibold">{title}</h2>
           {description && <p id={descId} className="mt-1 text-sm text-muted">{description}</p>}

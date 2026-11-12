@@ -194,7 +194,7 @@ function Editor({ id }: { id: string }) {
 
   return (
     <div className="flex h-[calc(100dvh-3.5rem)] w-full flex-col md:h-dvh">
-      <div className="flex flex-wrap items-center gap-3 border-b border-neutral-200 px-3 py-2 dark:border-neutral-800">
+      <div className="glass-lite flex flex-wrap items-center gap-3 rounded-none border-x-0 border-t-0 px-3 py-2">
         <Link href="/workflows" className="text-sm underline">← Workflows</Link>
         <label className="sr-only" htmlFor="wf-title">Workflow name</label>
         <input
@@ -284,7 +284,7 @@ function Editor({ id }: { id: string }) {
       </div>
 
       {execution && (
-        <section aria-label="Run result" className="max-h-52 overflow-y-auto border-t border-neutral-200 p-3 text-sm dark:border-neutral-800">
+        <section aria-label="Run result" className="glass-lite max-h-52 overflow-y-auto rounded-none border-x-0 border-b-0 p-3 text-sm">
           <p className="font-medium">
             Run {execution.execution.status}
             {execution.execution.error?.message ? `: ${execution.execution.error.message}` : ""}
@@ -312,7 +312,7 @@ function Editor({ id }: { id: string }) {
 
       {secrets && (
         <div role="alertdialog" aria-modal="true" aria-labelledby="sec-title" className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
-          <div className="w-full max-w-md space-y-3 rounded-lg bg-white p-5 shadow-xl dark:bg-neutral-900">
+          <div className="glass-strong w-full max-w-md space-y-3 rounded-2xl p-5">
             <h2 id="sec-title" className="font-semibold">Copy your webhook secret now</h2>
             <p className="text-sm">It is shown only once. Send it in the header named on the Webhook node.</p>
             {Object.entries(secrets).map(([nid, s]) => (

@@ -94,9 +94,7 @@ export function ConnectModal(props: ConnectModalProps) {
         </>
       }>
       <div className="mb-5 flex items-center gap-3">
-        <span className="flex size-10 items-center justify-center rounded-xl border border-line bg-surface">
-          <BrandLogo id={connector.id} name={connector.name} size={22} />
-        </span>
+        <BrandLogo id={connector.id} name={connector.name} size={24} />
         <Badge tone={badge.tone}>{badge.text}</Badge>
         {setup.source === "platform" && <span className="text-xs text-muted">Using this server&apos;s default app</span>}
       </div>

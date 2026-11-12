@@ -27,9 +27,7 @@ export function ConnectionCard({ connector, connections, onOpen }: Props) {
     <Card className="flex h-full flex-col gap-4 p-5 transition-colors hover:border-line-strong">
       <article aria-labelledby={headingId} className="flex flex-1 flex-col gap-4">
         <div className="flex items-start justify-between gap-3">
-          <span className="flex size-11 items-center justify-center rounded-xl border border-line bg-surface">
-            <BrandLogo id={connector.id} name={connector.name} size={24} />
-          </span>
+          <BrandLogo id={connector.id} name={connector.name} size={26} />
           <Badge tone={badge.tone}>{badge.text}</Badge>
         </div>
         <div className="min-w-0 flex-1">

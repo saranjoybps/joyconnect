@@ -15,7 +15,7 @@ export type ScheduleParams = { timezone?: string; rules?: Rule[] };
 
 const INTERVALS: Rule["interval"][] = ["seconds", "minutes", "hours", "days", "weeks", "months", "cron"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const INPUT = "rounded-md border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700";
+const INPUT = "rounded-md border border-line-strong bg-field px-2 py-1 text-sm dark:border-neutral-700";
 
 function zones(): string[] {
   try {

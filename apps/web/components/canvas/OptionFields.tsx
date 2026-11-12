@@ -7,7 +7,7 @@ import {
 } from "@/lib/options";
 
 const INPUT =
-  "w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700";
+  "w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm dark:border-neutral-700";
 
 export type OptionCtx = { nodeType: string; connectionId: string | null; parameters: Record<string, unknown> };
 
@@ -258,7 +258,7 @@ export function ResourceLocator(p: FieldProps) {
             type="button"
             aria-pressed={mode === m}
             onClick={() => setMode(m)}
-            className={`rounded-md border px-2 py-0.5 text-xs ${mode === m ? "border-neutral-900 bg-neutral-900 text-white dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900" : "border-neutral-300 dark:border-neutral-700"}`}
+            className={`rounded-md border px-2 py-0.5 text-xs ${mode === m ? "border-neutral-900 bg-neutral-900 text-white dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900" : "border-line-strong"}`}
           >
             {MODE_LABEL[m]}
           </button>

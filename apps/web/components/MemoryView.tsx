@@ -123,7 +123,7 @@ export function MemoryView() {
 
       <ul className="space-y-2">
         {items?.map((m) => (
-          <li key={m.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-line p-3.5">
+          <li key={m.id} className="flex flex-wrap items-center gap-3 glass rounded-2xl p-3.5">
             <Badge>{KIND_LABEL[m.kind] ?? m.kind}</Badge>
             {editing?.id === m.id ? (
               <>

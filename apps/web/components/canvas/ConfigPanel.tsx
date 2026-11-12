@@ -47,13 +47,13 @@ export function ConfigPanel(p: Props) {
 function WorkflowSettings({ workflow, onApply }: { workflow: Workflow; onApply: Props["onApply"] }) {
   const s = workflow.settings ?? {};
   return (
-    <aside aria-label="Workflow settings" className="w-80 shrink-0 space-y-3 overflow-y-auto border-l border-neutral-200 p-3 dark:border-neutral-800">
+    <aside aria-label="Workflow settings" className="glass-lite w-80 shrink-0 space-y-3 overflow-y-auto rounded-none border-y-0 border-r-0 p-3">
       <h2 className="text-sm font-semibold">Workflow settings</h2>
       <p className="text-xs text-neutral-600 dark:text-neutral-400">Select a node to configure it.</p>
       <label className="block space-y-1 text-xs font-medium">
         Approvals for unattended runs
         <select
-          className="w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm font-normal dark:border-neutral-700"
+          className="w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm font-normal dark:border-neutral-700"
           value={s.auto_approve ?? "off"}
           onChange={(e) => void onApply([{ op: "set_settings", settings: { auto_approve: e.target.value } }])}
         >
@@ -120,7 +120,7 @@ function NodeConfig({ workflowId, node, nodeType, siblings = [], published, last
   const shownError = test ? test.error : lastRun?.error;
 
   return (
-    <aside aria-label={`Configure ${node.name}`} className="w-96 shrink-0 space-y-4 overflow-y-auto border-l border-neutral-200 p-3 dark:border-neutral-800">
+    <aside aria-label={`Configure ${node.name}`} className="glass-lite w-96 shrink-0 space-y-4 overflow-y-auto rounded-none border-y-0 border-r-0 p-3">
       <div>
         <p className="text-xs text-neutral-600 dark:text-neutral-400">{nodeType?.name ?? node.type}</p>
         <label className="sr-only" htmlFor="node-name">Node name</label>
@@ -129,7 +129,7 @@ function NodeConfig({ workflowId, node, nodeType, siblings = [], published, last
           value={name}
           onChange={(e) => setName(e.target.value)}
           onBlur={() => name.trim() && name !== node.name && void onApply([{ op: "rename", id: node.id, name: name.trim() }])}
-          className="w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1 font-semibold dark:border-neutral-700"
+          className="w-full rounded-md border border-line-strong bg-field px-2 py-1 font-semibold dark:border-neutral-700"
         />
         {nodeType && <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">{nodeType.description}</p>}
       </div>
@@ -140,7 +140,7 @@ function NodeConfig({ workflowId, node, nodeType, siblings = [], published, last
           {mine.length ? (
             <select
               id="conn"
-              className="w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700"
+              className="w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm dark:border-neutral-700"
               value={node.connection_id ?? ""}
               onChange={(e) => changeAccount(e.target.value)}
             >
@@ -160,7 +160,7 @@ function NodeConfig({ workflowId, node, nodeType, siblings = [], published, last
           <label className="block space-y-1 text-xs font-medium">
             Resource
             <select
-              className="w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm font-normal dark:border-neutral-700"
+              className="w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm font-normal dark:border-neutral-700"
               value={nodeType.resource ?? ""}
               onChange={(e) => {
                 const group = siblings.filter((s) => s.resource === e.target.value);
@@ -174,7 +174,7 @@ function NodeConfig({ workflowId, node, nodeType, siblings = [], published, last
           <label className="block space-y-1 text-xs font-medium">
             Operation
             <select
-              className="w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm font-normal dark:border-neutral-700"
+              className="w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm font-normal dark:border-neutral-700"
               value={nodeType.type}
               onChange={(e) => switchOperation(e.target.value)}
             >

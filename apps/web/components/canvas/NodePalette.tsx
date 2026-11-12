@@ -22,7 +22,7 @@ export function NodePalette({ types, onAdd }: { types: NodeType[]; onAdd: (nt: N
   }, [types, q]);
 
   return (
-    <aside aria-label="Node palette" className="flex h-full w-60 shrink-0 flex-col border-r border-neutral-200 dark:border-neutral-800">
+    <aside aria-label="Node palette" className="glass-lite flex h-full w-60 shrink-0 flex-col rounded-none border-y-0 border-l-0">
       <div className="p-2">
         <label htmlFor="palette-search" className="sr-only">Search nodes</label>
         <input
@@ -31,7 +31,7 @@ export function NodePalette({ types, onAdd }: { types: NodeType[]; onAdd: (nt: N
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search nodes…"
-          className="w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700"
+          className="w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm dark:border-neutral-700"
         />
         <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">Drag onto the canvas, or click to add.</p>
       </div>
@@ -54,7 +54,7 @@ export function NodePalette({ types, onAdd }: { types: NodeType[]; onAdd: (nt: N
                       e.dataTransfer.effectAllowed = "move";
                     }}
                     onClick={() => onAdd(t)}
-                    className="flex w-full items-center justify-between gap-2 rounded-md border border-neutral-200 px-2 py-1.5 text-left text-sm hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900"
+                    className="flex w-full items-center justify-between gap-2 rounded-xl border border-line bg-field px-2 py-1.5 text-left text-sm hover:bg-surface-2"
                   >
                     <span className="truncate">{t.name}</span>
                     {t.risk !== "read" && !t.dynamic_risk && (

@@ -54,9 +54,9 @@ export function LoginForm() {
   }
 
   return (
-    <div className="anim-fade-up w-full max-w-sm space-y-8">
+    <div className="anim-fade-up glass-strong w-full max-w-sm space-y-8 rounded-3xl p-8">
       <div className="space-y-2 text-center">
-        <LogoMark width={28} height={28} className="mx-auto" />
+        <span className="btn-gradient mx-auto flex size-12 items-center justify-center rounded-2xl"><LogoMark width={26} height={26} /></span>
         <h1 className="text-2xl font-semibold tracking-tight">{mode === "signin" ? "Sign in" : "Create account"}</h1>
         <p className="text-sm text-muted">Connect your apps, then chat to get things done.</p>
       </div>

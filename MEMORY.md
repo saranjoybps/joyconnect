@@ -1,7 +1,7 @@
 # MEMORY.md — project context for future sessions
 
 Keep under 150 lines. Update before finishing every session (state, decisions, issues, next steps).
-Last updated: 2026-11-12, after the UI redesign.
+Last updated: 2026-11-12, after the glassmorphism redesign.
 
 ## 1. What we are building
 A **chat-first workflow platform**: connectors become nodes; users build workflows by chat or by drag and drop
@@ -81,16 +81,27 @@ Env lives in git-ignored root `.env`, `apps/api/.env.local`, `apps/web/.env.loca
 Docs: CLAUDE.md (design + rules), docs/decisions.md, README.md (setup, provider apps).
 
 ## UI redesign (2026-11-12)
-- Monochrome design system in `apps/web/components/ui/` (tokens in `globals.css`, class-based dark mode via
-  `<html class="dark">` + inline init script; Button, Field, Card/Badge/Skeleton/EmptyState/PageHeader, Modal
-  (focus trap, `alert` = alertdialog), Toast, icons, `BrandLogo`). Colour only for status (ok/warn/bad tokens).
+- DESIGN DIRECTION (changed 2026-11-12, replaces the earlier strict black-and-white style): colourful GLASSMORPHISM,
+  light (soft white / pale lavender-blue) and dark (deep navy / violet). Tokens are CSS variables in
+  `apps/web/app/globals.css`: text, border, surface, field, glass (`--glass-*`), shadow, gradient
+  (indigo -> violet -> cyan-700), status (emerald / amber / rose / sky = `ok / warn / bad / info`). Class-based dark
+  mode (`<html class="dark">`, inline init script, no flash); Light / Dark / System saved per user (`theme:<userId>`).
+- Glass rules: `.glass` (blur 18px) for sidebar, cards, composer, popovers; `.glass-strong` (blur 24px) for modals,
+  drawers, toasts; `.glass-lite` (NO blur) for canvas nodes, palette, config drawer, toolbars so panning stays smooth.
+  `@supports not (backdrop-filter)` falls back to a solid `--glass-solid`. Do not stack blur layers; no blur over the canvas.
+- Aurora background = one fixed `body::before` layer, animated slowly, off under prefers-reduced-motion.
+- Contrast: `npm run contrast` (apps/web/scripts/contrast.mjs) checks token pairs against WCAG AA over the worst aurora
+  blob in both themes; keep it passing when changing tokens. Gradient button/bubbles use white text on stops that pass.
+- Legacy `neutral-*`, `red-*`, `blue-*` Tailwind colours are retinted in globals.css (@theme) so older components follow.
+- Components in `apps/web/components/ui/` (Button with gradient primary, Field, Card/Badge/Skeleton/EmptyState/PageHeader,
+  Tabs, Modal (focus trap, `alert` = alertdialog), Toast, icons, BrandLogo). Use these, not ad-hoc classes.
 - App shell `components/shell/` (collapsible sidebar, chat history grouped by date, search, rename/delete, theme
   toggle, user menu, mobile drawer). Sidebar and ChatWindow talk through `lib/chatBus.ts` events and `?c=<id>`.
 - Chat: stop button (AbortController), tool timeline cards (input/output/duration), memory event ("Memory used" ->
   /memory), regenerate and edit-and-resend via `POST /api/conversations/{id}/rewind {user_index}`, rename via
   `PATCH /api/conversations/{id}`. SSE `tool_call.input`, `tool_result.output/duration_ms`, new `memory` event.
 - Connections: card grid + category filters + 4-step modal (`components/connections/ConnectModal.tsx`).
-- Logos: `simple-icons`; Slack and Google Contacts are not in the package, so they use a monogram fallback.
-- New `/settings` page; Memory/Workflows/Login restyled. Runs and canvas panels keep legacy neutral classes (they
-  follow dark mode but are not fully restyled yet).
+- Logos: `simple-icons` marks in official brand colour on a small white glass tile (dark marks stay visible in dark mode);
+  Slack and Google Contacts are not in the package, so they use a gradient monogram (no recreated logo).
+- New `/settings` page; every module (shell, chat, Connections, Workflows list/canvas, Runs, Memory, Settings, Login) uses the glass style.
 - Tests: API 621+ passed; web 168 passed; `next build` passes.

@@ -3,40 +3,72 @@
 /* Class-based dark mode: <html class="dark"> (set by the theme script before paint). */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ---- Design tokens: strict grayscale; colour only for status ---- */
+/* ============================================================
+   Design tokens: colourful glassmorphism, light and dark.
+   Every text/background pair used by the app is checked for WCAG AA (see README, scripts/contrast.mjs).
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
-  --surface: #fafafa;
-  --surface-2: #f4f4f5;
-  --border: #e4e4e7;
-  --border-strong: #d4d4d8;
-  --muted: #71717a;
-  --accent: #0a0a0a;
+  /* base + text */
+  --background: #f3f2ff;
+  --foreground: #1b1a3a;
+  --muted: #55587a;
+  /* surfaces */
+  --surface: rgba(255, 255, 255, 0.55);
+  --surface-2: rgba(99, 102, 241, 0.09);
+  --field: rgba(255, 255, 255, 0.72);
+  --border: rgba(99, 102, 241, 0.2);
+  --border-strong: rgba(79, 70, 229, 0.38);
+  /* brand */
+  --accent: #4f46e5;
   --accent-fg: #ffffff;
-  --ring: #52525b;
-  --success: #15803d;
-  --warning: #b45309;
-  --error: #b91c1c;
-  --radius: 0.75rem;
+  --ring: #4f46e5;
+  --grad-from: #4f46e5;  /* indigo */
+  --grad-via: #7c3aed;   /* violet */
+  --grad-to: #0e7490;    /* cyan (700 keeps white text AA) */
+  /* status: emerald, amber, rose, sky */
+  --success: #047857;
+  --warning: #92400e;
+  --error: #be123c;
+  --info: #0369a1;
+  /* glass */
+  --glass-bg: rgba(255, 255, 255, 0.66);
+  --glass-bg-strong: rgba(255, 255, 255, 0.86);
+  --glass-solid: #f8f7ff;           /* fallback without backdrop-filter */
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --glass-shadow: 0 1px 2px rgba(49, 46, 129, 0.06), 0 8px 24px -6px rgba(79, 70, 229, 0.16), 0 24px 48px -16px rgba(79, 70, 229, 0.14);
+  --glass-blur: 18px;
+  --aurora-a: rgba(129, 140, 248, 0.42);
+  --aurora-b: rgba(196, 181, 253, 0.5);
+  --aurora-c: rgba(103, 232, 249, 0.34);
+  --radius: 1rem;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   color-scheme: light;
 }
 
 .dark {
-  --background: #0a0a0a;
-  --foreground: #fafafa;
-  --surface: #111111;
-  --surface-2: #1a1a1a;
-  --border: #262626;
-  --border-strong: #3f3f46;
-  --muted: #a1a1aa;
-  --accent: #fafafa;
-  --accent-fg: #0a0a0a;
-  --ring: #a1a1aa;
-  --success: #4ade80;
+  --background: #0a0f24;
+  --foreground: #eceaff;
+  --muted: #a9acd0;
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-2: rgba(167, 139, 250, 0.14);
+  --field: rgba(255, 255, 255, 0.07);
+  --border: rgba(167, 139, 250, 0.24);
+  --border-strong: rgba(167, 139, 250, 0.5);
+  --ring: #a5b4fc;
+  --success: #34d399;
   --warning: #fbbf24;
-  --error: #f87171;
+  --error: #fda4af;
+  --info: #38bdf8;
+  --glass-bg: rgba(22, 26, 60, 0.58);
+  --glass-bg-strong: rgba(18, 22, 52, 0.86);
+  --glass-solid: #141838;
+  --glass-border: rgba(196, 181, 253, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.12);
+  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -8px rgba(0, 0, 0, 0.55), 0 28px 56px -20px rgba(91, 33, 182, 0.4);
+  --aurora-a: rgba(99, 102, 241, 0.34);
+  --aurora-b: rgba(139, 92, 246, 0.34);
+  --aurora-c: rgba(34, 211, 238, 0.2);
   color-scheme: dark;
 }
 
@@ -45,6 +77,7 @@
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-field: var(--field);
   --color-line: var(--border);
   --color-line-strong: var(--border-strong);
   --color-muted: var(--muted);
@@ -53,14 +86,109 @@
   --color-ok: var(--success);
   --color-warn: var(--warning);
   --color-bad: var(--error);
+  --color-info: var(--info);
   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
+/* Older components use neutral-*, red-* and blue-*: retint them to the lavender, rose and indigo palette. */
+@theme {
+  --color-neutral-50: #f7f6ff;
+  --color-neutral-100: #eeecfd;
+  --color-neutral-200: #dedbf7;
+  --color-neutral-300: #c5c1ea;
+  --color-neutral-400: #9a9ec6;
+  --color-neutral-500: #62668a;
+  --color-neutral-600: #4d5070;
+  --color-neutral-700: #3a3c5a;
+  --color-neutral-800: #272845;
+  --color-neutral-900: #171832;
+  --color-neutral-950: #0d0e24;
+  --color-red-50: #fff1f2;
+  --color-red-100: #ffe4e6;
+  --color-red-300: #fda4af;
+  --color-red-400: #fb7185;
+  --color-red-500: #f43f5e;
+  --color-red-600: #e11d48;
+  --color-red-700: #be123c;
+  --color-red-800: #9f1239;
+  --color-red-900: #881337;
+  --color-red-950: #4c0519;
+  --color-blue-400: #818cf8;
+  --color-blue-700: #4338ca;
+}
+
+html { background: var(--background); }
+
 body {
-  background: var(--background);
+  background: transparent;
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* ---- Aurora: a slow mesh gradient behind the app (one fixed, GPU-composited layer) ---- */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 35% at 18% 20%, var(--aurora-a), transparent 70%),
+    radial-gradient(38% 40% at 82% 16%, var(--aurora-b), transparent 70%),
+    radial-gradient(45% 40% at 70% 85%, var(--aurora-c), transparent 70%),
+    radial-gradient(35% 35% at 10% 80%, var(--aurora-b), transparent 70%);
+  animation: aurora 48s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes aurora {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(3%, -2%, 0) scale(1.08) rotate(2deg); }
+}
+
+/* ---- Glass surfaces ---- */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+}
+.glass-strong {
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-highlight);
+}
+/* Translucent but not blurred: for nodes and panels over the workflow canvas, so panning stays smooth. */
+.glass-lite {
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 1px 2px rgba(49, 46, 129, 0.1), 0 6px 16px -6px rgba(79, 70, 229, 0.25), inset 0 1px 0 var(--glass-highlight);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass, .glass-strong { background: var(--glass-solid); }
+}
+
+.btn-gradient {
+  background-image: linear-gradient(120deg, var(--grad-from), var(--grad-via) 55%, var(--grad-to));
+  color: #fff;
+  box-shadow: 0 6px 16px -6px rgba(99, 102, 241, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: filter 150ms var(--ease), transform 150ms var(--ease);
+}
+.btn-gradient:hover { filter: brightness(1.1) saturate(1.05); }
+.btn-gradient:active { transform: translateY(1px); }
+.text-gradient {
+  background-image: linear-gradient(120deg, var(--grad-from), var(--grad-via) 55%, var(--grad-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* Legacy solid "primary" buttons (neutral-900 / neutral-100) get the gradient too. */
+.bg-neutral-900.text-white, .dark .dark\:bg-neutral-100.dark\:text-neutral-900 {
+  background-image: linear-gradient(120deg, var(--grad-from), var(--grad-via) 55%, var(--grad-to));
+  color: #fff;
 }
 
 /* Visible keyboard focus everywhere. */
@@ -68,9 +196,6 @@ body {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
-
-/* Legacy neutral palette (older components) follows the grayscale tokens so everything matches. */
-.dark .dark\:bg-neutral-900, .dark .dark\:bg-neutral-950 { background-color: var(--surface); }
 
 @keyframes fade-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
@@ -83,6 +208,18 @@ body {
   animation: shimmer 1.4s ease infinite;
 }
 
+/* React Flow: transparent canvas so the aurora shows, glass-lite controls. */
+.react-flow { background: transparent !important; }
+.react-flow__controls-button { background: var(--glass-bg-strong) !important; color: var(--foreground) !important; border-color: var(--border) !important; }
+.react-flow__edge-path { stroke: var(--border-strong) !important; }
+.react-flow__handle { background: var(--accent) !important; border-color: var(--glass-solid) !important; }
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  body::before { animation: none; }
+}
+
+/* Gradient headings need lighter stops on navy to stay readable. */
+.dark .text-gradient {
+  background-image: linear-gradient(120deg, #a5b4fc, #c4b5fd 55%, #67e8f9);
 }

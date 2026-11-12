@@ -18,7 +18,7 @@ export function NodeCard({ data, selected }: NodeProps) {
   return (
     <div
       data-testid={`node-${node.id}`}
-      className={`min-w-44 rounded-lg border bg-white px-3 py-2 text-sm shadow-sm dark:bg-neutral-900 ${selected ? "border-sky-500 ring-2 ring-sky-300" : "border-neutral-300 dark:border-neutral-700"} ${node.disabled ? "opacity-50" : ""}`}
+      className={`glass-lite min-w-44 rounded-2xl px-3 py-2 text-sm ${selected ? "!border-accent ring-2 ring-accent/40" : ""} ${node.disabled ? "opacity-50" : ""}`}
     >
       {inputs.map((name, i) => (
         <Handle
@@ -34,7 +34,7 @@ export function NodeCard({ data, selected }: NodeProps) {
         {status && <span aria-label={`last run: ${status}`} className={`size-2 rounded-full ${STATUS[status] ?? "bg-neutral-400"}`} />}
         <span className="font-medium">{node.name}</span>
         {risk && risk !== "read" && (
-          <span className={`text-[10px] font-semibold uppercase ${risk === "destructive" ? "text-red-700" : "text-amber-700"}`}>{risk}</span>
+          <span className={`text-[10px] font-semibold uppercase ${risk === "destructive" ? "text-red-700" : "text-amber-800"}`}>{risk}</span>
         )}
       </div>
       <div className="text-xs text-neutral-600 dark:text-neutral-400">{nodeType?.name ?? node.type}</div>

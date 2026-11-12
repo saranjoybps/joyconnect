@@ -282,3 +282,22 @@ An operator can provide a shared app for all users by setting `PLATFORM_<APP>_<F
 7. Add `apps/web/public/icons/<id>.svg`.
 8. Add respx tests for the callback and each tool in `apps/api/tests/`.
 9. Run `pytest -q`. The registry discovers the module automatically; no router or UI changes.
+
+## Visual checklist (glass UI, both themes)
+
+Run `cd apps/web && npm run dev`, then check each item in **Light**, **Dark** and **System** (sidebar toggle, or Settings > Appearance).
+Also run `npm run contrast` (WCAG AA check of the colour tokens; it must print "All pairs pass").
+
+- [ ] No flash of the wrong theme on a hard reload; the choice survives reload and is remembered per signed-in user.
+- [ ] Aurora background is visible but subtle and moves slowly; with "reduce motion" enabled in the OS it is still.
+- [ ] Login: glass card, gradient button, visible focus ring on every field.
+- [ ] Sidebar: glass, collapses to icons, chat history grouped by date, rename/delete dialogs, user menu popover, mobile drawer.
+- [ ] Chat: gradient user bubbles, readable assistant text, glass composer (auto-grow, Enter / Shift+Enter, Stop), slash menu with brand tiles,
+      tool-call cards (expand input/output), approval card (Approve/Reject), error card (Retry/Reconnect), "Memory used" link.
+- [ ] Connections: grid of glass cards with full-colour logo tiles, tabs filter (arrow keys), 4-step setup dialog, copyable redirect URI, no inline expanding.
+- [ ] Workflows list, then the canvas: node cards stay crisp, panning and zooming are smooth (nodes and panels have no blur), config drawer readable.
+- [ ] Runs: glass rows expand to input/output; filters and pager readable.
+- [ ] Memory and Settings: switch, list, theme picker.
+- [ ] Browser without `backdrop-filter` (or forced-colors): surfaces fall back to solid colours and stay readable.
+- [ ] Keyboard only: Tab reaches everything, focus ring always visible, dialogs trap focus and Esc closes them.
+- [ ] 375 px wide phone: no horizontal scroll, sidebar becomes a drawer.

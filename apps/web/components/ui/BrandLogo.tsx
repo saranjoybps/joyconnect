@@ -5,10 +5,9 @@ import {
 
 /**
  * Official brand marks from the Simple Icons package (CC0 data; the marks stay the property of their owners).
- * Used only to identify the app in a connector's own card or mode chip, rendered monochrome in the text colour.
- * Slack and Google Contacts are not in Simple Icons, so they fall back to a neutral monogram (no recreated logo).
+ * Used only to identify the app in its own card, dialog or mode chip.
  */
-const ICONS: Record<string, { path: string; title: string }> = {
+const ICONS: Record<string, { path: string; title: string; hex: string }> = {
   airtable: siAirtable, asana: siAsana, github: siGithub, gmail: siGmail,
   google_calendar: siGooglecalendar, google_docs: siGoogledocs, google_drive: siGoogledrive,
   google_forms: siGoogleforms, google_meet: siGooglemeet, google_sheets: siGooglesheets,
@@ -20,20 +19,28 @@ export function hasBrandIcon(id: string): boolean {
   return id in ICONS;
 }
 
+/**
+ * A small glass tile with the app's mark in its official brand colour (Simple Icons hex). The tile is always a light
+ * glass chip, so dark marks (GitHub, Notion) stay visible in the dark theme. Slack and Google Contacts are not in
+ * Simple Icons: they get a gradient monogram, never a recreated logo.
+ */
 export function BrandLogo({ id, name, size = 20, className = "" }: { id: string; name?: string; size?: number; className?: string }) {
   const icon = ICONS[id];
+  const box = Math.round(size * 1.7);
+  const tile = `inline-flex shrink-0 items-center justify-center rounded-[28%] border border-white/70 bg-white/85 shadow-sm ${className}`;
   if (icon) {
     return (
-      <svg role="img" aria-label={`${name ?? icon.title} logo`} viewBox="0 0 24 24" width={size} height={size}
-        fill="currentColor" className={`shrink-0 ${className}`}>
-        <path d={icon.path} />
-      </svg>
+      <span className={tile} style={{ width: box, height: box }}>
+        <svg role="img" aria-label={`${name ?? icon.title} logo`} viewBox="0 0 24 24" width={size} height={size} fill={`#${icon.hex}`}>
+          <path d={icon.path} />
+        </svg>
+      </span>
     );
   }
   const letter = (name ?? id).trim().charAt(0).toUpperCase() || "?";
   return (
-    <span aria-hidden data-testid="brand-fallback" style={{ width: size, height: size, fontSize: size * 0.6 }}
-      className={`inline-flex shrink-0 items-center justify-center rounded-md border border-current font-semibold leading-none ${className}`}>
+    <span aria-hidden data-testid="brand-fallback" style={{ width: box, height: box, fontSize: size * 0.8 }}
+      className={`btn-gradient inline-flex shrink-0 items-center justify-center rounded-[28%] font-semibold leading-none ${className}`}>
       {letter}
     </span>
   );

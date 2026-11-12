@@ -6,6 +6,7 @@ import { ConnectionCard } from "@/components/ConnectionCard";
 import { ConnectModal } from "@/components/connections/ConnectModal";
 import { Card, EmptyState, PageHeader, Skeleton } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Field";
+import { Tabs } from "@/components/ui/Tabs";
 import { SearchIcon } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -107,7 +108,7 @@ export function ConnectionsView() {
 
       {notice && (
         <div role="status"
-          className={`flex items-center justify-between gap-3 rounded-xl border p-3.5 text-sm ${notice.kind === "error" ? "border-bad/40 text-bad" : notice.kind === "warn" ? "border-warn/40 text-warn" : "border-ok/40 text-ok"}`}>
+          className={`glass flex items-center justify-between gap-3 rounded-2xl p-3.5 text-sm ${notice.kind === "error" ? "!border-bad/50 text-bad" : notice.kind === "warn" ? "!border-warn/50 text-warn" : "!border-ok/50 text-ok"}`}>
           <span>{notice.text}</span>
           <button type="button" className="underline underline-offset-4" onClick={() => router.replace("/connections")}>Dismiss</button>
         </div>
@@ -121,14 +122,8 @@ export function ConnectionsView() {
           <Input id="connector-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder="Search apps" className="pl-9" />
         </div>
-        <div role="group" aria-label="Filter by category" className="flex flex-wrap gap-2">
-          {categories.map((c) => (
-            <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)}
-              className={`h-8 rounded-full border px-3 text-xs font-medium transition-colors ${category === c ? "border-accent bg-accent text-accent-fg" : "border-line text-muted hover:border-line-strong hover:text-foreground"}`}>
-              {c}
-            </button>
-          ))}
-        </div>
+        <Tabs label="Filter by category" controls="connector-grid" value={category} onChange={setCategory}
+          tabs={categories.map((c) => ({ id: c, label: c }))} />
       </div>
 
       {connectors === null && !error && (
@@ -147,7 +142,7 @@ export function ConnectionsView() {
         </EmptyState>
       )}
 
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul id="connector-grid" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {visible.map((c) => (
           <li key={c.id}>
             <ConnectionCard connector={c} connections={connections.filter((x) => x.provider === c.id)} onOpen={(x) => setOpenId(x.id)} />

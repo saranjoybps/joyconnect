@@ -51,7 +51,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Desktop sidebar */}
       <aside aria-label="Sidebar"
-        className={`sticky top-0 hidden h-dvh shrink-0 border-r border-line transition-[width] duration-200 md:block ${collapsed ? "w-16" : "w-72"}`}>
+        className={`glass sticky top-0 hidden h-dvh shrink-0 rounded-none border-y-0 border-l-0 transition-[width] duration-200 md:block ${collapsed ? "w-16" : "w-72"}`}>
         {/* usePathname() is runtime data on dynamic routes, so the navigation streams in. */}
         <Suspense fallback={<div className="p-4"><Skeleton className="h-8 w-full" /></div>}>
           <Nav collapsed={collapsed} toggle={toggle} />
@@ -59,7 +59,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-line bg-background/90 px-3 backdrop-blur md:hidden">
+        <header className="sticky top-0 z-20 flex h-14 items-center gap-2 glass rounded-none border-x-0 border-t-0 px-3 md:hidden">
           <IconButton label="Open menu" onClick={() => setDrawer(true)}><MenuIcon /></IconButton>
           <span className="flex items-center gap-2 font-semibold tracking-tight"><LogoMark /> Connect</span>
         </header>
@@ -69,8 +69,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile drawer */}
       {drawer && (
         <div className="fixed inset-0 z-40 md:hidden">
-          <div aria-hidden className="absolute inset-0 bg-black/50" onClick={() => setDrawer(false)} />
-          <aside role="dialog" aria-modal="true" aria-label="Navigation" className="anim-fade-up absolute inset-y-0 left-0 w-[min(20rem,85vw)] border-r border-line shadow-2xl">
+          <div aria-hidden className="absolute inset-0 bg-[#0a0f24]/45" onClick={() => setDrawer(false)} />
+          <aside role="dialog" aria-modal="true" aria-label="Navigation" className="anim-fade-up glass-strong absolute inset-y-0 left-0 w-[min(20rem,85vw)] rounded-none border-y-0 border-l-0">
             <div className="absolute right-2 top-3 z-10">
               <IconButton label="Close menu" onClick={() => setDrawer(false)}><CloseIcon /></IconButton>
             </div>

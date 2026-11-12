@@ -267,14 +267,14 @@ export function ChatWindow() {
               ) : (
                 <>
                   <div>
-                    <h2 className="text-3xl font-semibold tracking-tight">What can I do for you?</h2>
+                    <h2 className="text-gradient text-3xl font-semibold tracking-tight">What can I do for you?</h2>
                     <p className="mt-2 text-sm text-muted">Ask in plain language. Type / to pick an app or build a workflow.</p>
                   </div>
                   <ul aria-label="Suggested prompts" className="grid w-full gap-2 sm:grid-cols-2">
                     {SUGGESTIONS.map((s) => (
                       <li key={s}>
                         <button type="button" onClick={() => { setInput(s); inputRef.current?.focus(); }}
-                          className="h-full w-full rounded-xl border border-line px-4 py-3 text-left text-sm text-muted transition-colors hover:border-line-strong hover:bg-surface hover:text-foreground">
+                          className="h-full w-full glass rounded-2xl px-4 py-3 text-left text-sm text-muted transition-colors hover:text-foreground hover:!border-line-strong">
                           {s}
                         </button>
                       </li>
@@ -316,7 +316,7 @@ export function ChatWindow() {
                       </div>
                     ) : (
                       <>
-                        <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-surface-2 px-4 py-2.5 text-[15px] leading-7">{item.text}</p>
+                        <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-gradient-to-br from-indigo-600 to-violet-600 px-4 py-2.5 text-[15px] leading-7 text-white shadow-md">{item.text}</p>
                         <div className="flex gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
                           <CopyButton text={item.text} label="Copy message" />
                           {canRewind && (
@@ -359,7 +359,7 @@ export function ChatWindow() {
                   onDecide={(approve) => decide(item.approval.approval_id, approve)} />;
               case "error":
                 return (
-                  <div key={index} role="alert" className="rounded-xl border border-bad/40 p-3 text-sm">
+                  <div key={index} role="alert" className="glass rounded-2xl !border-bad/50 p-3 text-sm">
                     <p className="text-bad">{item.text}</p>
                     {lastUserText && (
                       <Button size="sm" variant="secondary" className="mt-2" disabled={busy}
@@ -381,12 +381,12 @@ export function ChatWindow() {
         </div>
       </div>
 
-      <div className="border-t border-transparent bg-gradient-to-t from-background from-70% to-transparent px-4 pb-4 pt-2 sm:px-6">
+      <div className="border-t border-transparent bg-gradient-to-t from-[var(--background)] from-60% to-transparent px-4 pb-4 pt-2 sm:px-6">
         <form onSubmit={send} className="relative mx-auto w-full max-w-3xl">
           {menuOpen && <SlashMenu modes={matches} activeIndex={Math.min(menuIndex, Math.max(matches.length - 1, 0))} onPick={pickMode} onHover={setMenuIndex} />}
           <div className="mb-2 flex items-center gap-2 text-xs">
             <span data-testid="mode-chip" title={mode.description}
-              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-background py-1 pl-2.5 pr-1.5 font-mono font-medium">
+              className="inline-flex items-center gap-1.5 glass rounded-full py-1 pl-2.5 pr-1.5 font-mono font-medium">
               <ModeIcon mode={mode} size={14} />
               Mode: /{mode.command}
               {mode.kind !== "custom" && (
@@ -398,7 +398,7 @@ export function ChatWindow() {
             </span>
             <span className="hidden text-muted sm:inline">Type / to switch mode</span>
           </div>
-          <div className="flex items-end gap-2 rounded-2xl border border-line-strong bg-background p-2 shadow-sm transition-shadow focus-within:border-foreground/60 focus-within:shadow-md">
+          <div className="flex items-end gap-2 glass-strong rounded-3xl p-2 transition-shadow focus-within:!border-accent focus-within:ring-2 focus-within:ring-accent/25">
             <label htmlFor="chat-input" className="sr-only">Message</label>
             <textarea ref={inputRef} id="chat-input" rows={1} value={input}
               onChange={(e) => { setInput(e.target.value); setMenuClosed(false); setMenuIndex(0); }} onKeyDown={onKeyDown}

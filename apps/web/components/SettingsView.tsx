@@ -11,8 +11,8 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const THEMES: { value: ThemePref; label: string; hint: string }[] = [
   { value: "system", label: "System", hint: "Match your device" },
-  { value: "light", label: "Light", hint: "Black on white" },
-  { value: "dark", label: "Dark", hint: "White on black" },
+  { value: "light", label: "Light", hint: "Pale lavender glass" },
+  { value: "dark", label: "Dark", hint: "Deep navy and violet" },
 ];
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
@@ -51,11 +51,11 @@ export function SettingsView() {
     <section aria-labelledby="settings-title" className="space-y-6">
       <PageHeader id="settings-title" title="Settings" description="Appearance, memory and your account." />
 
-      <Section title="Appearance" description="Strict black and white, in light or dark. Your choice is saved in this browser.">
+      <Section title="Appearance" description="Light, dark or follow your device. Your choice is saved for your account in this browser.">
         <div role="radiogroup" aria-label="Theme" className="grid gap-3 sm:grid-cols-3">
           {THEMES.map((t) => (
             <label key={t.value}
-              className={`flex cursor-pointer flex-col gap-0.5 rounded-xl border p-4 text-sm transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ${pref === t.value ? "border-foreground bg-surface" : "border-line hover:border-line-strong"}`}>
+              className={`flex cursor-pointer flex-col gap-0.5 rounded-xl border p-4 text-sm transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ${pref === t.value ? "border-accent bg-surface-2 ring-2 ring-accent/30" : "border-line bg-field hover:border-line-strong"}`}>
               <input type="radio" name="theme" value={t.value} checked={pref === t.value} onChange={() => setPref(t.value)} className="sr-only" />
               <span className="font-medium">{t.label}</span>
               <span className="text-muted">{t.hint}</span>

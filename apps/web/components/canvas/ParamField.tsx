@@ -6,7 +6,7 @@ import type { JsonSchema } from "@/lib/workflows";
 import { OptionField, type OptionCtx } from "./OptionFields";
 
 const INPUT =
-  "w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700";
+  "w-full rounded-md border border-line-strong bg-field px-2 py-1.5 text-sm dark:border-neutral-700";
 
 export function baseType(s: JsonSchema): string | undefined {
   if (Array.isArray(s.type)) return s.type.find((t) => t !== "null");

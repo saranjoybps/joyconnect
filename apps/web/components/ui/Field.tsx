@@ -1,7 +1,7 @@
 import { forwardRef, type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 const BASE =
-  "w-full rounded-lg border border-line-strong bg-background px-3 text-sm text-foreground placeholder:text-muted transition-colors duration-150 hover:border-muted focus-visible:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/15 disabled:opacity-50 aria-[invalid=true]:border-bad";
+  "w-full rounded-xl border border-line-strong bg-field px-3 text-sm text-foreground placeholder:text-muted transition-colors duration-150 hover:border-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:opacity-50 aria-[invalid=true]:border-bad";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(
   { className = "", ...rest }, ref,

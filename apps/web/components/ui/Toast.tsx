@@ -33,7 +33,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div aria-live="polite" className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
         {items.map((t) => (
           <div key={t.id} role={t.kind === "error" ? "alert" : "status"}
-            className="anim-fade-up pointer-events-auto flex items-start gap-3 rounded-xl border border-line bg-background p-3 text-sm shadow-lg">
+            className="anim-fade-up pointer-events-auto flex items-start gap-3 glass-strong rounded-2xl p-3 text-sm">
             <span aria-hidden className={`mt-1.5 size-2 shrink-0 rounded-full bg-current ${TONE[t.kind]}`} />
             <span className="min-w-0 flex-1">{t.text}</span>
             <button type="button" aria-label="Dismiss notification" onClick={() => dismiss(t.id)}

@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 export type ThemePref = "system" | "light" | "dark";
 const KEY = "theme";
@@ -11,9 +12,9 @@ export const THEME_SCRIPT = `(function(){try{var p=localStorage.getItem("${KEY}"
 type Ctx = { pref: ThemePref; resolved: "light" | "dark"; setPref: (p: ThemePref) => void; toggle: () => void };
 const ThemeCtx = createContext<Ctx | null>(null);
 
-function readPref(): ThemePref {
+function readPref(userId?: string | null): ThemePref {
   try {
-    const v = localStorage.getItem(KEY);
+    const v = (userId && localStorage.getItem(`${KEY}:${userId}`)) || localStorage.getItem(KEY);
     return v === "light" || v === "dark" ? v : "system";
   } catch {
     return "system";
@@ -27,6 +28,7 @@ function systemDark(): boolean {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [pref, setPrefState] = useState<ThemePref>("system");
   const [sysDark, setSysDark] = useState(false);
+  const userId = useRef<string | null>(null);   // the signed-in user: the choice is stored per user
   const [ready, setReady] = useState(false);   // until the stored choice is read, keep the class the inline script set
 
   useEffect(() => {
@@ -36,6 +38,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setSysDark(systemDark());
     /* eslint-enable react-hooks/set-state-in-effect */
     setReady(true);
+    // Once the user is known, switch to their own saved choice (and mirror it to the pre-paint key).
+    try {
+      Promise.resolve(getSupabaseBrowserClient().auth.getSession()).then((r) => {
+        const id = r?.data?.session?.user?.id ?? null;
+        userId.current = id;
+        if (id) {
+          const mine = readPref(id);
+          setPrefState(mine);
+          try { localStorage.setItem(KEY, mine); } catch { /* not persisted */ }
+        }
+      }, () => undefined);
+    } catch { /* no session in isolated renders */ }
     if (typeof matchMedia !== "function") return;
     const mq = matchMedia("(prefers-color-scheme: dark)");
     const on = () => setSysDark(mq.matches);
@@ -51,7 +65,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const setPref = useCallback((p: ThemePref) => {
     setPrefState(p);
-    try { localStorage.setItem(KEY, p); } catch { /* storage unavailable: theme still applies for this visit */ }
+    try {
+      localStorage.setItem(KEY, p);
+      if (userId.current) localStorage.setItem(`${KEY}:${userId.current}`, p);
+    } catch { /* storage unavailable: theme still applies for this visit */ }
   }, []);
   const toggle = useCallback(() => setPref(resolved === "dark" ? "light" : "dark"), [resolved, setPref]);
 

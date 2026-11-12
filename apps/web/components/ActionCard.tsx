@@ -44,9 +44,9 @@ export function ActionCard({ label, status, summary, action, input, output, dura
 
   return (
     <li className="relative pl-6">
-      <span aria-hidden className={`absolute left-0 top-[1.05rem] size-2.5 rounded-full ring-4 ring-background ${DOT[status]}`} />
+      <span aria-hidden className={`absolute left-0 top-[1.05rem] size-2.5 rounded-full ring-4 ring-[var(--glass-solid)] ${DOT[status]}`} />
       <div role={status === "error" ? "alert" : undefined}
-        className={`rounded-xl border bg-background text-sm ${status === "error" ? "border-bad/40" : "border-line"}`}>
+        className={`glass-lite rounded-2xl text-sm ${status === "error" ? "!border-bad/50" : ""}`}>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5">
           <span className="font-medium">{label}{status === "error" ? " failed" : status === "running" ? "…" : ""}</span>
           <span className={`text-xs ${status === "error" ? "text-bad" : status === "ok" ? "text-ok" : "text-muted"}`}>{statusText}</span>
