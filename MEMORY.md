@@ -40,9 +40,9 @@ Revision plan (CLAUDE.md section 5): workflow engine in steps 1-7 below. Progres
 
 ## 6. Progress and next steps
 - [x] Part 1: CLAUDE.md rewritten, MEMORY.md updated.
-- [ ] Step 1: workflow schema, node registry, patch API, versioning, migrations.
-- [ ] Step 2: executor + worker, expressions, node records, retries, test-node, run-from-here.
-- [ ] Step 3: triggers (manual, schedule, webhook). **Then STOP and wait for the owner's go-ahead.**
+- [x] Step 1: workflow schema, node registry, patch API, versioning, migrations.
+- [x] Step 2: executor + worker, expressions, node records, retries, test-node, run-from-here.
+- [x] Step 3: triggers (manual, schedule, webhook). **STOPPED here: waiting for the owner's go-ahead before Step 4.**
 - [ ] Step 4 canvas UI · Step 5 chat modes/slash commands/server-side scope · Step 6 chat workflow tools + diff review +
   delete approval · Step 7 AI Agent / LLM / Classify / Extract / Approval nodes.
 

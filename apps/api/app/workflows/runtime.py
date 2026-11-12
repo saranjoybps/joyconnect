@@ -14,6 +14,7 @@ from app.db.client import Database
 from app.workflows.engine import Engine, EngineServices
 from app.workflows.runner import ExecutionService
 from app.workflows.service import WorkflowService
+from app.workflows.triggers import TriggerService
 
 
 @dataclass
@@ -33,4 +34,7 @@ def build_workflow_runtime(db: Database, store: SecretStore, http: httpx.AsyncCl
     if now is not None:
         svc.now = now
     engine = Engine(svc)
-    return WorkflowRuntime(workflows, engine, ExecutionService(db, workflows, engine, settings))
+    executions = ExecutionService(db, workflows, engine, settings)
+    triggers = TriggerService(db, workflows, executions, store, settings)
+    workflows.on_publish, workflows.on_unpublish = triggers.sync, triggers.deactivate
+    return WorkflowRuntime(workflows, engine, executions, triggers)

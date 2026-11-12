@@ -10,6 +10,7 @@ from jsonschema import Draft202012Validator
 
 from app.core.config import REPO_ROOT
 from app.workflows.registry import MAIN, NodeRegistry, NodeType, get_registry
+from app.workflows.schedule import validate_config
 
 SCHEMA_PATH = REPO_ROOT / "schemas" / "workflow.schema.json"
 Doc = dict[str, Any]
@@ -126,6 +127,12 @@ def publish_errors(doc: Doc, registry: NodeRegistry | None = None) -> list[str]:
         for key in sorted(required):
             if n["parameters"].get(key) is None:
                 errs.append(f"node '{n['name']}': parameter '{key}' is required")
+        if n["type"] == "schedule_trigger":
+            errs += [f"node '{n['name']}': {m}" for m in validate_config(n["parameters"])]
+        if n["type"] == "webhook_trigger" and n["parameters"].get("authentication") == "header":
+            hn = str(n["parameters"].get("header_name") or "X-Webhook-Secret")
+            if not hn.replace("-", "").isalnum():
+                errs.append(f"node '{n['name']}': the header name may only contain letters, digits and dashes")
         if nt.connector and not n.get("connection_id"):
             errs.append(f"node '{n['name']}': choose which connected {nt.connector.replace('_', ' ')} account to use")
     return errs

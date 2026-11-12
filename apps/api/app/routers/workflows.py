@@ -87,9 +87,10 @@ async def patch_workflow(workflow_id: str, body: PatchBody, user: UserDep, svc: 
 @router.post("/workflows/{workflow_id}/publish")
 async def publish_workflow(workflow_id: str, user: UserDep, svc: WorkflowsDep) -> dict[str, Any]:
     try:
-        return {"workflow": await svc.publish(user.id, workflow_id)}
+        doc, extras = await svc.publish(user.id, workflow_id)
     except WorkflowError as exc:
         raise _http(exc) from exc
+    return {"workflow": doc, **extras}
 
 
 @router.post("/workflows/{workflow_id}/unpublish")
@@ -124,3 +125,25 @@ async def get_version(workflow_id: str, version: int, user: UserDep, svc: Workfl
         return {"workflow": await svc.version_document(user.id, workflow_id, version)}
     except WorkflowError as exc:
         raise _http(exc) from exc
+
+
+@router.get("/workflows/{workflow_id}/triggers")
+async def list_triggers(workflow_id: str, request: Request, user: UserDep) -> list[dict[str, Any]]:
+    """Schedules (next run) and webhooks (URL; never the secret) of the published workflow."""
+    try:
+        return await request.app.state.triggers.list(user.id, workflow_id)
+    except WorkflowError as exc:
+        raise _http(exc) from exc
+
+
+@router.post("/workflows/{workflow_id}/triggers/{node_id}/rotate-secret")
+async def rotate_webhook_secret(workflow_id: str, node_id: str, request: Request, user: UserDep) -> dict[str, Any]:
+    """New header secret for a webhook; shown once."""
+    from app.workflows.runner import ExecutionError
+
+    try:
+        return {"secret": await request.app.state.triggers.rotate_secret(user.id, workflow_id, node_id)}
+    except WorkflowError as exc:
+        raise _http(exc) from exc
+    except ExecutionError as exc:
+        raise HTTPException(exc.status, {"message": exc.message}) from exc

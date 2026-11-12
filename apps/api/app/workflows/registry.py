@@ -119,8 +119,8 @@ CORE_NODES: list[NodeType] = [
              _obj({
                  "http_method": {"enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"], "default": "POST"},
                  "authentication": {"enum": ["none", "header"], "default": "none"},
-                 "header_name": {"type": "string"},
-                 "header_value": {"type": "string", "description": "Stored encrypted; never shown again."},
+                 "header_name": {"type": "string", "default": "X-Webhook-Secret",
+                                 "description": "The secret is generated for you when you publish (shown once)."},
                  "response_mode": {"enum": ["immediately", "last_node", "respond_node"], "default": "immediately"},
                  "response_code": {"type": "integer", "minimum": 100, "maximum": 599, "default": 200},
              }), inputs=[], icon="webhook"),

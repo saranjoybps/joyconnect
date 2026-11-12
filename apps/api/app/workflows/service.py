@@ -21,7 +21,7 @@ from app.workflows.registry import NodeRegistry, get_registry
 from app.workflows.schema import publish_errors
 
 Doc = dict[str, Any]
-TriggerHook = Callable[[Doc, Doc], Awaitable[None]]   # (workflow row, published document)
+TriggerHook = Callable[[Doc, Doc], Awaitable[Doc]]   # (workflow row, published document) -> extras for the caller
 
 
 class WorkflowError(Exception):
@@ -138,7 +138,8 @@ class WorkflowService:
         await self._snapshot(won[0])
         return to_document(won[0]), log, patch_risk(before, ops, row.get("published_version") is not None)
 
-    async def publish(self, user_id: str, workflow_id: str) -> Doc:
+    async def publish(self, user_id: str, workflow_id: str) -> tuple[Doc, Doc]:
+        """Returns (workflow document, extras). Extras carry what is shown only once, e.g. generated webhook secrets."""
         row = await self.row(user_id, workflow_id)
         doc = to_document(row)
         errors = publish_errors(doc, self.registry)
@@ -149,9 +150,8 @@ class WorkflowService:
                                    {"status": "published", "published_version": row["version"], "updated_at": _now()})
         if not won:
             raise Conflict(await self.get(user_id, workflow_id))
-        if self.on_publish:
-            await self.on_publish(won[0], doc)
-        return to_document(won[0])
+        extras = await self.on_publish(won[0], doc) if self.on_publish else {}
+        return to_document(won[0]), extras or {}
 
     async def unpublish(self, user_id: str, workflow_id: str) -> Doc:
         await self.row(user_id, workflow_id)

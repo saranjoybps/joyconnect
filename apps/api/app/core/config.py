@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     worker_poll_seconds: float = 1.0
     worker_lease_seconds: int = 300
     scheduler_tick_seconds: float = 5.0
+    webhook_max_body_bytes: int = 1_000_000
+    webhook_wait_seconds: int = 30                   # response_mode last_node / respond_node
+    webhook_rate_limit_per_minute: int = 120         # per webhook path
 
     def platform_value(self, app_provider: str, field_key: str) -> str:
         name = f"PLATFORM_{app_provider}_{field_key}".upper()

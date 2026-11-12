@@ -61,9 +61,6 @@ async def main(once: bool = False) -> None:
         db = SupabaseRestDatabase(settings.supabase_url, settings.supabase_service_role_key, http)
         store = build_secret_store(settings.secret_store, db, settings.token_encryption_key)
         runtime = build_workflow_runtime(db, store, http, settings, llm_factory=lambda: OpenAIChat(settings))
-        from app.workflows.triggers import TriggerService
-
-        runtime.triggers = TriggerService(db, runtime.workflows, runtime.executions, store, settings)
         worker_id = f"{socket.gethostname()}-{os.getpid()}"
         log.info("worker %s started", worker_id)
         await run_forever(runtime, settings, worker_id, once=once)

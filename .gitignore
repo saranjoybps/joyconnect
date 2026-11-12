@@ -18,3 +18,7 @@ coverage/
 .api.log
 .api.err.log
 .web.err.log
+
+api.log
+web.log
+*.egg-info/
