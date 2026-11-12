@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -20,6 +21,10 @@ from app.oauth.tokens import NeedsReauth, TokenService
 
 log = logging.getLogger(__name__)
 MAX_RESULT_CHARS = 12_000
+
+
+async def _sleep(seconds: float) -> None:   # module-level so tests can replace it
+    await asyncio.sleep(seconds)
 
 
 @dataclass
@@ -148,6 +153,23 @@ class ToolExecutor:
         ok, result = await self._run(bound, args)
         return ok, result, int((time.monotonic() - started) * 1000)
 
+    async def _call_with_retries(self, bound: BoundTool, ctx: ToolContext, args: dict[str, Any]) -> Any:
+        """Run the handler. READ tools are retried with backoff on 429 / 5xx / network errors; write and
+        destructive tools run exactly once (a retry could duplicate the action)."""
+        attempts = self.settings.retry_max_attempts if bound.tool.risk == "read" else 1
+        for attempt in range(1, max(attempts, 1) + 1):
+            try:
+                return await bound.tool.handler(ctx, **args)
+            except (ProviderError, httpx.TransportError) as exc:
+                retryable = exc.retryable if isinstance(exc, ProviderError) else True
+                if not retryable or attempt >= attempts:
+                    raise
+                hint = exc.retry_after if isinstance(exc, ProviderError) else None
+                delay = min(hint if hint is not None else self.settings.retry_base_delay_seconds * 2 ** (attempt - 1),
+                            self.settings.retry_max_delay_seconds)
+                log.info("retrying %s (attempt %d/%d) in %.1fs", bound.tool.name, attempt + 1, attempts, delay)
+                await _sleep(delay)
+
     async def _run(self, bound: BoundTool, args: dict[str, Any]) -> tuple[bool, Any]:
         name = bound.manifest.name
         if bound.missing:
@@ -157,7 +179,7 @@ class ToolExecutor:
         try:
             token = await self.tokens.get_token(bound.connection)
             ctx = ToolContext(http=self.http, token=token, settings=self.settings, connection=bound.connection)
-            return True, await bound.tool.handler(ctx, **args)
+            return True, await self._call_with_retries(bound, ctx, args)
         except ProviderError as exc:
             if exc.kind == "scope" and bound.manifest.verifies_scopes:
                 # The token claimed the scope but Google refused (stale record, revoked grant...).

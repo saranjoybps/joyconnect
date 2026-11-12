@@ -19,6 +19,8 @@ Row = dict[str, Any]
 class Database(Protocol):
     async def select(self, table: str, filters: Row | None = None, order: str | None = None,
                      limit: int | None = None) -> list[Row]: ...
+    async def select_since(self, table: str, filters: Row | None, column: str, since: datetime,
+                           order: str | None = None, limit: int | None = None) -> list[Row]: ...
     async def insert(self, table: str, row: Row) -> Row: ...
     async def update(self, table: str, filters: Row, values: Row) -> list[Row]: ...
     async def delete(self, table: str, filters: Row) -> list[Row]: ...
@@ -58,6 +60,15 @@ class SupabaseRestDatabase:
     async def select(self, table: str, filters: Row | None = None, order: str | None = None,
                      limit: int | None = None) -> list[Row]:
         params = {"select": "*", **_eq_params(filters)}
+        if order:
+            params["order"] = order
+        if limit:
+            params["limit"] = str(limit)
+        return await self._request("GET", table, params=params)
+
+    async def select_since(self, table: str, filters: Row | None, column: str, since: datetime,
+                           order: str | None = None, limit: int | None = None) -> list[Row]:
+        params = {"select": "*", **_eq_params(filters), column: f"gte.{since.isoformat()}"}
         if order:
             params["order"] = order
         if limit:
@@ -109,6 +120,12 @@ class MemoryDatabase:
         if order:
             col, _, direction = order.partition(".")
             rows.sort(key=lambda r: (r.get(col) is None, r.get(col)), reverse=direction == "desc")
+        return rows[:limit] if limit else rows
+
+    async def select_since(self, table: str, filters: Row | None, column: str, since: datetime,
+                           order: str | None = None, limit: int | None = None) -> list[Row]:
+        rows = [r for r in await self.select(table, filters, order=order)
+                if r.get(column) and datetime.fromisoformat(str(r[column]).replace("Z", "+00:00")) >= since]
         return rows[:limit] if limit else rows
 
     async def insert(self, table: str, row: Row) -> Row:

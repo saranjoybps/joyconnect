@@ -13,7 +13,7 @@ from typing import Any, AsyncIterator, Callable
 import httpx
 
 from app.agent.llm import LLM, LLMError, LLMResult
-from app.agent.policy import build_preview, decide, redact_args, tool_label
+from app.agent.policy import build_preview, decide, redact_args, redact_result, scrub, tool_label
 from app.agent.prompts import system_prompt
 from app.agent.tools import (
     MAX_RESULT_CHARS, BoundTool, ToolExecutor, available_tools, log_scope_mismatch, pick_connection,
@@ -69,6 +69,10 @@ class AgentRuntime:
             conversation_id = conv["id"]
         if await self._pending_approvals(user_id, conversation_id):
             raise AgentError(409, "Approve or reject the pending action first.")
+        limit = self.settings.daily_chat_message_limit
+        if limit and await self._used_today("messages", user_id, {"role": "user"}, limit) >= limit:
+            raise AgentError(429, f"You have reached the daily limit of {limit} chat messages. "
+                                  "It resets at midnight UTC.")
         await self._save_message(user_id, conversation_id, "user", content=text)
         async for ev in self._loop(user_id, conversation_id, text):
             yield ev
@@ -107,13 +111,14 @@ class AgentRuntime:
             await self.db.update("tool_runs", {"id": approval["tool_run_id"]}, {"status": "approved"})
             bound = await self._bind(user_id, preview["tool"])
             args = await self._call_args(conversation_id, tool_call_id)
+            ms = None
             if bound is None or args is None:
                 ok, result = False, {"error": "This app is no longer connected."}
             else:
                 yield self._tool_call_event(tool_call_id, bound)
-                ok, result = await self.executor.execute(bound, args)
+                ok, result, ms = await self.executor.execute_timed(bound, args)
             await self._finish_call(user_id, conversation_id, approval["tool_run_id"], tool_call_id, ok, result,
-                                    "ok" if ok else "error")
+                                    "ok" if ok else "error", ms)
             yield _ev("tool_result", id=tool_call_id, tool=preview["tool"], ok=ok, summary=_summary(ok, result))
 
         if await self._pending_approvals(user_id, conversation_id):
@@ -121,6 +126,17 @@ class AgentRuntime:
             return
         async for ev in self._loop(user_id, conversation_id, ""):
             yield ev
+
+    async def _used_today(self, table: str, user_id: str, extra: dict[str, Any], cap: int) -> int:
+        now = datetime.now(timezone.utc)
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        rows = await self.db.select_since(table, {"user_id": user_id, **extra}, "created_at", midnight,
+                                          limit=cap + 1)
+        return len(rows)
+
+    async def _tool_limit_reached(self, user_id: str) -> bool:
+        limit = self.settings.daily_tool_run_limit
+        return bool(limit) and await self._used_today("tool_runs", user_id, {}, limit) >= limit
 
     # ------------------------------------------------------------------ loop
 
@@ -195,9 +211,20 @@ class AgentRuntime:
             yield _ev("tool_result", id=call_id, tool=name, ok=False, summary=problem)
             return
 
+        if await self._tool_limit_reached(user_id):
+            limit = self.settings.daily_tool_run_limit
+            result = {"error": f"The daily limit of {limit} tool runs has been reached. Tell the user it "
+                               "resets at midnight UTC and nothing was done."}
+            await self._save_message(user_id, conversation_id, "tool", content=_result_text(result),
+                                     tool_call_id=call_id)
+            yield _ev("tool_result", id=call_id, tool=name, ok=False,
+                      summary=f"Daily limit of {limit} tool runs reached (resets at midnight UTC)")
+            return
+
         run = await self.db.insert("tool_runs", {
             "user_id": user_id, "conversation_id": conversation_id, "connection_id": bound.connection["id"],
             "tool": name, "args_redacted": redact_args(args), "status": "pending",
+            "connector": bound.manifest.id, "risk": bound.tool.risk,
         })
 
         if bound.missing:
@@ -218,14 +245,17 @@ class AgentRuntime:
             return
 
         yield self._tool_call_event(call_id, bound)
-        ok, result = await self.executor.execute(bound, args)
-        await self._finish_call(user_id, conversation_id, run["id"], call_id, ok, result, "ok" if ok else "error")
+        ok, result, ms = await self.executor.execute_timed(bound, args)
+        await self._finish_call(user_id, conversation_id, run["id"], call_id, ok, result, "ok" if ok else "error", ms)
         yield _ev("tool_result", id=call_id, tool=name, ok=ok, summary=_summary(ok, result))
 
     # ------------------------------------------------------------------ persistence helpers
 
-    async def _finish_call(self, user_id, conversation_id, run_id, call_id, ok, result, status) -> None:
-        await self.db.update("tool_runs", {"id": run_id}, {"status": status, "result_summary": _summary(ok, result)})
+    async def _finish_call(self, user_id, conversation_id, run_id, call_id, ok, result, status,
+                           duration_ms: int | None = None) -> None:
+        await self.db.update("tool_runs", {"id": run_id}, {
+            "status": status, "result_summary": scrub(_summary(ok, result)), "duration_ms": duration_ms,
+            "result_redacted": redact_result(result), "finished_at": datetime.now(timezone.utc).isoformat()})
         await self._save_message(user_id, conversation_id, "tool", content=_result_text(result), tool_call_id=call_id)
 
     async def _save_message(self, user_id, conversation_id, role, content=None, tool_calls=None,

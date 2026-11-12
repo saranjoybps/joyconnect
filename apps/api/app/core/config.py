@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     max_tools_per_request: int = 24
     chat_rate_limit_per_minute: int = 20
     approval_ttl_hours: int = 24
+    # Per-user daily limits (UTC day). 0 = unlimited.
+    daily_chat_message_limit: int = 200
+    daily_tool_run_limit: int = 500
+    # Retries for READ tools only, on 429 / 5xx / network errors. Write tools are never retried.
+    retry_max_attempts: int = 3
+    retry_base_delay_seconds: float = 0.5
+    retry_max_delay_seconds: float = 8.0
 
     # API versions (not credentials).
     notion_version: str = "2026-03-11"

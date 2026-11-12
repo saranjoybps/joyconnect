@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from typing import Any, Literal
 
 from app.connectors.base import ConnectorManifest, Risk, ToolDef
@@ -11,6 +13,43 @@ Decision = Literal["run", "ask"]
 _SENSITIVE_KEY_PARTS = ("token", "secret", "password", "passwd", "api_key", "apikey", "authorization", "cookie")
 _REDACT_STR_LEN = 60
 _PREVIEW_STR_LEN = 4000
+
+
+# Token-shaped strings are masked wherever they appear (bearer tokens, Slack/GitHub/Stripe/Linear/Google
+# keys, JWTs).
+_TOKEN_RE = re.compile(
+    r"(Bearer\s+[A-Za-z0-9._~+/=-]{10,}|xox[abprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}"
+    r"|(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{10,}|ya29\.[A-Za-z0-9._-]{20,}|lin_api_[A-Za-z0-9]{20,}"
+    r"|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|pat[A-Za-z0-9]{14}\.[a-f0-9]{40,})")
+_RESULT_STR_LEN = 300
+_RESULT_MAX_CHARS = 6000
+
+
+def scrub(text: str) -> str:
+    return _TOKEN_RE.sub("[REDACTED]", text)
+
+
+def redact_result(value: Any, key: str = "") -> Any:
+    """Tool output for the run history: secrets masked, long strings and lists clipped, total size capped."""
+    out = _redact_result(value, key)
+    text = json.dumps(out, default=str, ensure_ascii=False)
+    if len(text) > _RESULT_MAX_CHARS:
+        return {"_truncated": True, "preview": text[:_RESULT_MAX_CHARS]}
+    return out
+
+
+def _redact_result(value: Any, key: str = "") -> Any:
+    if key and _is_sensitive(key):
+        return "[REDACTED]"
+    if isinstance(value, dict):
+        return {k: _redact_result(v, k) for k, v in value.items()}
+    if isinstance(value, list):
+        head = [_redact_result(v) for v in value[:20]]
+        return head + ([f"...(+{len(value) - 20} items)"] if len(value) > 20 else [])
+    if isinstance(value, str):
+        value = scrub(value)
+        return value if len(value) <= _RESULT_STR_LEN else f"{value[:_RESULT_STR_LEN]}...({len(value)} chars)"
+    return value
 
 
 def decide(risk: Risk, auto_approve_writes: bool) -> Decision:
@@ -35,8 +74,10 @@ def redact_args(value: Any, key: str = "") -> Any:
     if isinstance(value, list):
         head = [redact_args(v) for v in value[:5]]
         return head + ([f"…(+{len(value) - 5} items)"] if len(value) > 5 else [])
-    if isinstance(value, str) and len(value) > _REDACT_STR_LEN:
-        return f"{value[:_REDACT_STR_LEN]}…({len(value)} chars)"
+    if isinstance(value, str):
+        value = scrub(value)
+        if len(value) > _REDACT_STR_LEN:
+            return f"{value[:_REDACT_STR_LEN]}…({len(value)} chars)"
     return value
 
 
