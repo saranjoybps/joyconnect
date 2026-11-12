@@ -11,6 +11,8 @@ export type JsonSchema = {
   required?: string[];
   minimum?: number;
   maximum?: number;
+  /** App nodes: how this parameter is edited (a list loaded from the account, a locator...). */
+  "x-ui"?: import("@/lib/options").UiSpec;
 };
 
 export type NodeType = {
@@ -27,6 +29,9 @@ export type NodeType = {
   icon: string | null;
   connector: string | null;
   needs_connection: boolean;
+  /** App nodes: the Resource and Operation dropdowns (derived from the tool name). */
+  resource?: string | null;
+  operation?: string | null;
 };
 
 export type WorkflowSummary = {

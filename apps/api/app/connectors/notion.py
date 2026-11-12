@@ -143,6 +143,40 @@ async def create_page(ctx: ToolContext, parent_id: str, title: str, content: str
 
 ID = {"type": "string", "description": "Notion ID (from search results or a Notion URL)."}
 
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def _found(ctx: ToolContext, query: str | None, kinds: tuple[str, ...]) -> list[dict]:
+    out = await search(ctx, query or "")
+    return [option(r["id"], r.get("title") or "(untitled)", r.get("object"), r.get("url"))
+            for r in out["results"] if r.get("object") in kinds]
+
+
+async def load_pages(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    return await _found(ctx, query, ("page",))
+
+
+async def load_databases(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    return await _found(ctx, query, ("database", "data_source"))
+
+
+async def load_parents(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    return await _found(ctx, query, ("page", "database", "data_source"))
+
+
+LOADERS = [
+    LoaderDef(name="pages", description="Pages shared with the integration (type to search).", handler=load_pages),
+    LoaderDef(name="databases", description="Databases shared with the integration (type to search).", handler=load_databases),
+    LoaderDef(name="parents", description="Pages and databases a new page can go in.", handler=load_parents),
+]
+_URL = r"([0-9a-f]{32})(?:\?|$|#)"
+PARAM_UI = {
+    "notion__get_page": {"page_id": {"kind": "locator", "loader": "pages", "modes": ["list", "url", "id"], "url_pattern": _URL}},
+    "notion__query_database": {"database_id": {"kind": "locator", "loader": "databases", "modes": ["list", "url", "id"], "url_pattern": _URL}},
+    "notion__create_page": {"parent_id": {"kind": "locator", "loader": "parents", "modes": ["list", "url", "id"], "url_pattern": _URL}},
+}
+
+
 MANIFEST = ConnectorManifest(
     id="notion",
     name="Notion",
@@ -175,6 +209,7 @@ MANIFEST = ConnectorManifest(
     account_label=account_label,
     revoke=revoke,
     health_tool="notion__search", health_args={"query": ""},
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         ToolDef(
             name="notion__search",

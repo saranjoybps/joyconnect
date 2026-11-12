@@ -108,6 +108,34 @@ async def comment_on_issue(ctx: ToolContext, repo: str, number: int, body: str) 
 
 REPO = {"type": "string", "description": "Repository as 'owner/name'."}
 
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_repos(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_repos(ctx)
+    items = [option(r["full_name"], r["full_name"], "private" if r.get("private") else "public", r.get("url"))
+             for r in out["repos"]]
+    return [i for i in items if not query or query.lower() in i["name"].lower()]
+
+
+async def load_issues(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_issues(ctx, params["repo"], "open")
+    return [option(i["number"], f"#{i['number']} {i['title']}", i.get("state"), i.get("url")) for i in out["issues"]]
+
+
+LOADERS = [
+    LoaderDef(name="repos", description="Repositories the GitHub App can see.", handler=load_repos),
+    LoaderDef(name="issues", description="Open issues of a repository.", handler=load_issues, needs=["repo"]),
+]
+_REPO = {"kind": "locator", "loader": "repos", "modes": ["list", "url", "id"], "url_pattern": r"github\.com/([^/\s]+/[^/\s#?]+)"}
+PARAM_UI = {
+    "github__list_issues": {"repo": _REPO},
+    "github__create_issue": {"repo": _REPO},
+    "github__comment_on_issue": {
+        "repo": _REPO, "number": {"kind": "options", "loader": "issues", "depends_on": ["repo"]}},
+}
+
+
 MANIFEST = ConnectorManifest(
     id="github",
     name="GitHub",
@@ -144,6 +172,7 @@ MANIFEST = ConnectorManifest(
     account_label=account_label,
     revoke=revoke,
     health_tool="github__list_repos", health_args={},
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         ToolDef(
             name="github__list_repos",

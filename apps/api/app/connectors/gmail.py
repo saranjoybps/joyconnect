@@ -72,6 +72,19 @@ async def list_labels(ctx: ToolContext) -> dict:
                        for l in resp.json().get("labels", [])]}
 
 
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_labels(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_labels(ctx)
+    return [option(l["id"], l["name"], l.get("type")) for l in out["labels"]]
+
+
+LOADERS = [LoaderDef(name="labels", description="Your Gmail labels.", handler=load_labels,
+                     scopes_of="gmail__list_labels")]
+PARAM_UI: dict = {}          # no send_email field takes a label today; the loader serves the chat agent and future nodes
+
+
 MANIFEST = google_manifest(
     id="gmail",
     name="Gmail",
@@ -80,6 +93,7 @@ MANIFEST = google_manifest(
     api_to_enable="Gmail API",
     health_tool="gmail__list_labels", health_args={},
     scope_labels={SEND: "Send email", LABELS: "Gmail labels"},
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         ToolDef(
             name="gmail__send_email",

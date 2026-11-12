@@ -55,6 +55,7 @@ class NodeType:
     tool: str | None = None
     wait_for_all_inputs: bool = False   # Merge waits for every connected input
     strict_parameters: bool = False     # app nodes: unknown keys are errors
+    ui: dict[str, dict[str, Any]] = field(default_factory=dict)   # app nodes: parameter -> how the canvas edits it
 
     @property
     def is_trigger(self) -> bool:
@@ -66,14 +67,48 @@ class NodeType:
     def risk_of(self, parameters: dict[str, Any] | None = None) -> Risk:
         return self.risk(parameters or {}) if callable(self.risk) else self.risk
 
+    def public_parameters(self) -> dict[str, Any]:
+        """The parameter schema for the canvas: each parameter that loads options carries an `x-ui` hint."""
+        if not self.ui:
+            return self.parameters
+        props = {k: ({**v, "x-ui": self.ui[k]} if k in self.ui else v)
+                 for k, v in self.parameters.get("properties", {}).items()}
+        return {**self.parameters, "properties": props}
+
     def to_public(self) -> dict[str, Any]:
+        res, op = split_action(self.tool) if self.tool else (None, None)
         return {
+            "resource": res, "operation": op,
             "type": self.type, "name": self.name, "category": self.category, "description": self.description,
-            "parameters": self.parameters, "inputs": self.inputs, "outputs": self.output_names({}),
+            "parameters": self.public_parameters(), "inputs": self.inputs, "outputs": self.output_names({}),
             "dynamic_outputs": callable(self.outputs), "risk": self.risk_of({}) if not callable(self.risk) else "read",
             "dynamic_risk": callable(self.risk), "icon": self.icon, "connector": self.connector,
             "needs_connection": self.connector is not None,
         }
+
+
+_VERBS = ["comment_on", "list", "get", "search", "create", "add", "append", "update", "delete", "clear", "send",
+          "post", "upload", "complete", "query", "replace", "insert"]
+
+
+def _singular(word: str) -> str:
+    if word.endswith("ies"):
+        return word[:-3] + "y"
+    return word[:-1] if word.endswith("s") and not word.endswith("ss") else word
+
+
+def split_action(tool_name: str) -> tuple[str, str]:
+    """"google_sheets__append_row" -> ("Row", "Append"). The Resource and Operation dropdowns of an app node are
+    derived from the tool names, so every connector gets them without per-tool configuration."""
+    action = tool_name.split("__", 1)[1]
+    for verb in _VERBS:
+        if action.startswith(verb + "_") and len(action) > len(verb) + 1:
+            words = action[len(verb) + 1:].split("_")
+            words[-1] = _singular(words[-1])
+            noun = " ".join(words)
+            return noun[:1].upper() + noun[1:], verb.replace("_", " ").capitalize()
+    text = action.replace("_", " ")
+    return text[:1].upper() + text[1:], "Run"
 
 
 def _obj(props: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
@@ -268,7 +303,7 @@ def _app_nodes() -> list[NodeType]:
             out.append(NodeType(
                 type=t.name, name=f"{m.name}: {action[:1].upper()}{action[1:]}", category="app",
                 description=f"{t.description} {EXPR_NOTE}", parameters=t.parameters, risk=t.risk, icon=m.icon,
-                connector=m.id, tool=t.name, strict_parameters=True))
+                connector=m.id, tool=t.name, strict_parameters=True, ui=m.param_ui.get(t.name, {})))
     return out
 
 

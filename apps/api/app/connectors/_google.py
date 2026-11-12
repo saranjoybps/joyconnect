@@ -26,6 +26,7 @@ MIME_SHEET = "application/vnd.google-apps.spreadsheet"
 MIME_DOC = "application/vnd.google-apps.document"
 MIME_SLIDES = "application/vnd.google-apps.presentation"
 MIME_FORM = "application/vnd.google-apps.form"
+MIME_FOLDER = "application/vnd.google-apps.folder"
 
 
 def _jwt_claims(id_token: str) -> dict:
@@ -79,13 +80,17 @@ async def google_token_check(ctx) -> dict:
 def google_manifest(*, id: str, name: str, description: str, scopes: list[str], tools: list[ToolDef],
                     api_to_enable: str, scope_labels: dict[str, str] | None = None,
                     health_tool: str | None = None, health_args: dict | None = None,
-                    core_scopes: list[str] | None = None) -> ConnectorManifest:
+                    core_scopes: list[str] | None = None, loaders: list | None = None,
+                    param_ui: dict | None = None) -> ConnectorManifest:
     # Tools that do not name their own scopes need the connector's CORE scopes only, so adding an optional
     # scope (file search) never breaks the tools an existing connection already had.
     if core_scopes is not None:
         for t in tools:
             if not t.scopes:
                 t.scopes = list(core_scopes)
+        for l in loaders or []:
+            if not l.scopes:
+                l.scopes = list(core_scopes)
     return ConnectorManifest(
         health_tool=health_tool, health_args=health_args or {},
         health=None if health_tool else google_token_check,
@@ -115,6 +120,8 @@ def google_manifest(*, id: str, name: str, description: str, scopes: list[str], 
         account_label=google_account_label,
         revoke=google_revoke,
         tools=tools,
+        loaders=loaders or [],
+        param_ui=param_ui or {},
     )
 
 

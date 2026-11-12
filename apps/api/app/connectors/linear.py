@@ -80,6 +80,19 @@ async def create_issue(ctx: ToolContext, team_id: str, title: str, description: 
     return res["issue"]
 
 
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_teams(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_teams(ctx)
+    return [option(t["id"], f"{t['name']} ({t['key']})") for t in out["teams"]]
+
+
+LOADERS = [LoaderDef(name="teams", description="Your Linear teams.", handler=load_teams)]
+_TEAM = {"kind": "options", "loader": "teams", "empty_label": "All teams"}
+PARAM_UI = {"linear__list_issues": {"team_id": _TEAM}, "linear__create_issue": {"team_id": {"kind": "options", "loader": "teams"}}}
+
+
 MANIFEST = api_key_manifest(
     id="linear", name="Linear",
     description="List teams and issues and create issues in Linear.",
@@ -90,6 +103,7 @@ MANIFEST = api_key_manifest(
     setup_guide=["Open Linear > Settings > Security & access > Personal API keys.",
                  "Create a key (read and create access is enough) and paste it here."],
     health_tool="linear__list_teams",
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         ToolDef(name="linear__list_teams", description="List Linear teams (id, key, name). Needed to create issues.",
                 parameters=object_schema({}), risk="read", handler=list_teams),

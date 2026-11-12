@@ -81,6 +81,38 @@ async def create_task(ctx: ToolContext, project_gid: str, name: str, notes: str 
     return {"gid": t.get("gid"), "name": t.get("name"), "url": t.get("permalink_url")}
 
 
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_workspaces(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_workspaces(ctx)
+    return [option(w["gid"], w["name"]) for w in out["workspaces"]]
+
+
+async def load_projects(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    """Projects of one workspace, or (none chosen) of every workspace, labelled "Workspace > Project"."""
+    if params.get("workspace_gid"):
+        return [option(p["gid"], p["name"]) for p in (await list_projects(ctx, params["workspace_gid"]))["projects"]]
+    out: list[dict] = []
+    for w in (await list_workspaces(ctx))["workspaces"][:10]:
+        out += [option(p["gid"], f"{w['name']} > {p['name']}") for p in (await list_projects(ctx, w["gid"]))["projects"]]
+    return out
+
+
+LOADERS = [
+    LoaderDef(name="workspaces", description="Your Asana workspaces.", handler=load_workspaces),
+    LoaderDef(name="projects", description="Projects of a workspace (or of every workspace).", handler=load_projects),
+]
+_WS = {"kind": "options", "loader": "workspaces"}
+_PROJECT = {"kind": "options", "loader": "projects"}
+PARAM_UI = {
+    "asana__list_projects": {"workspace_gid": _WS},
+    "asana__search": {"workspace_gid": _WS},
+    "asana__list_tasks": {"project_gid": _PROJECT},
+    "asana__create_task": {"project_gid": _PROJECT},
+}
+
+
 MANIFEST = api_key_manifest(
     id="asana", name="Asana",
     description="List workspaces, projects and tasks, and create tasks in Asana.",
@@ -91,6 +123,7 @@ MANIFEST = api_key_manifest(
     setup_guide=["Open Asana > Settings > Apps > Manage Developer Apps > Create new token.",
                  "Copy the token (shown once) and paste it here."],
     health_tool="asana__list_workspaces",
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         ToolDef(name="asana__list_workspaces", description="List the user's Asana workspaces.",
                 parameters=object_schema({}), risk="read", handler=list_workspaces),

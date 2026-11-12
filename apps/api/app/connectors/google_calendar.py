@@ -111,6 +111,37 @@ async def free_busy(ctx: ToolContext, time_min: str, time_max: str, calendar_ids
     return {"calendars": {cid: {"busy": v.get("busy", []), "errors": v.get("errors", [])} for cid, v in data.items()}}
 
 
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_calendars(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_calendars(ctx)
+    return [option(c["id"], c["name"] + (" (primary)" if c.get("primary") else ""), c.get("access_role"))
+            for c in out["calendars"]]
+
+
+async def load_events(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    """Upcoming events (next 60 days) so an event can be picked instead of typing its id."""
+    now = datetime.now(timezone.utc)
+    out = await list_events(ctx, now.isoformat(), (now + timedelta(days=60)).isoformat())
+    return [option(e["id"], e.get("summary") or "(no title)", e.get("start")) for e in out["events"]]
+
+
+LOADERS = [
+    LoaderDef(name="calendars", description="Your calendars.", handler=load_calendars, scopes_of="google_calendar__list_calendars"),
+    LoaderDef(name="events", description="Your upcoming events (next 60 days).", handler=load_events,
+              scopes_of="google_calendar__list_events"),
+]
+_EVENT = {"kind": "options", "loader": "events"}
+PARAM_UI = {
+    "google_calendar__free_busy": {"calendar_ids": {"kind": "multi", "loader": "calendars"}},
+    "google_calendar__update_event": {"event_id": _EVENT},
+    "google_calendar__delete_event": {"event_id": _EVENT},
+}
+
+
 MANIFEST = google_manifest(
     id="google_calendar",
     name="Google Calendar",
@@ -119,6 +150,7 @@ MANIFEST = google_manifest(
     api_to_enable="Google Calendar API",
     health_tool="google_calendar__list_calendars", health_args={},
     scope_labels={EVENTS: "Calendar events", CALENDAR_LIST: "Calendar list", FREEBUSY: "Free/busy"},
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         ToolDef(
             name="google_calendar__list_events",

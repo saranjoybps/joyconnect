@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from urllib.parse import quote
 
 from app.connectors._google import (DRIVE_METADATA, DRIVE_METADATA_LABEL, MIME_SHEET, google_manifest,
@@ -86,6 +87,80 @@ async def clear_range(ctx: ToolContext, spreadsheet_id: str, range: str) -> dict
     return {"cleared_range": resp.json().get("clearedRange")}
 
 
+from app.connectors._google import drive_search  # noqa: E402
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+def _quote_tab(tab: str) -> str:
+    return "'" + tab.replace("'", "''") + "'"
+
+
+def tab_of(range_: str | None) -> str | None:
+    """The tab named in an A1 range: "'My tab'!A:B" -> "My tab", "Sheet1" -> "Sheet1", "A1:B2" stays a tab-less range."""
+    if not range_ or not range_.strip():
+        return None
+    head = range_.rsplit("!", 1)[0] if "!" in range_ else range_
+    if "!" not in range_ and re.fullmatch(r"\$?[A-Za-z]{1,3}\$?\d*(:\$?[A-Za-z]{1,3}\$?\d*)?", head):
+        return None                                  # a bare cell range such as A1:B2 names no tab
+    if head.startswith("'") and head.endswith("'") and len(head) >= 2:
+        head = head[1:-1].replace("''", "'")
+    return head or None
+
+
+def _column_name(i: int) -> str:
+    n, out = i + 1, ""
+    while n:
+        n, r = divmod(n - 1, 26)
+        out = chr(65 + r) + out
+    return out
+
+
+async def load_spreadsheets(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    found = await drive_search(ctx, MIME_SHEET, query, 25)      # the same call the chat tool makes
+    return [option(m["id"], m["name"], f"Edited {m['modified'][:10]}" if m.get("modified") else None, m.get("url"))
+            for m in found["matches"]]
+
+
+async def load_tabs(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_tabs(ctx, params["spreadsheet_id"])
+    return [option(t["title"], t["title"], f"{t['rows']} rows, {t['columns']} columns") for t in out["tabs"]]
+
+
+async def load_columns(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    """Header row (row 1) of the chosen tab: the columns a row has, in order."""
+    sid, tab = params["spreadsheet_id"], tab_of(params.get("range"))
+    if tab is None:
+        tabs = (await list_tabs(ctx, sid))["tabs"]
+        if not tabs:
+            return []
+        tab = tabs[0]["title"]
+    rows = (await get_values(ctx, sid, f"{_quote_tab(tab)}!1:1"))["rows"]
+    header = rows[0] if rows else []
+    return [option(str(h).strip() or f"Column {_column_name(i)}", str(h).strip() or f"Column {_column_name(i)}",
+                   f"Column {_column_name(i)}") for i, h in enumerate(header)]
+
+
+LOADERS = [
+    LoaderDef(name="spreadsheets", description="Your spreadsheets, newest first (type to search by name).",
+              handler=load_spreadsheets, scopes=[DRIVE_METADATA]),
+    LoaderDef(name="tabs", description="The tabs of a spreadsheet.", handler=load_tabs, needs=["spreadsheet_id"]),
+    LoaderDef(name="columns", description="The column headers (row 1) of a tab.", handler=load_columns,
+              needs=["spreadsheet_id"]),
+]
+_SS = {"kind": "locator", "loader": "spreadsheets", "modes": ["list", "url", "id"], "url_pattern": r"/d/([A-Za-z0-9_-]{20,})"}
+_TAB = {"kind": "range", "loader": "tabs", "depends_on": ["spreadsheet_id"]}
+PARAM_UI = {
+    "google_sheets__get_values": {"spreadsheet_id": _SS, "range": _TAB},
+    "google_sheets__append_row": {
+        "spreadsheet_id": _SS, "range": _TAB,
+        "values": {"kind": "columns", "loader": "columns", "depends_on": ["spreadsheet_id", "range"], "output": "array"}},
+    "google_sheets__update_values": {"spreadsheet_id": _SS, "range": _TAB},
+    "google_sheets__list_tabs": {"spreadsheet_id": _SS},
+    "google_sheets__add_tab": {"spreadsheet_id": _SS},
+    "google_sheets__clear_range": {"spreadsheet_id": _SS, "range": _TAB},
+}
+
+
 MANIFEST = google_manifest(
     id="google_sheets",
     name="Google Sheets",
@@ -94,6 +169,7 @@ MANIFEST = google_manifest(
     core_scopes=["https://www.googleapis.com/auth/spreadsheets"],
     scope_labels={DRIVE_METADATA: DRIVE_METADATA_LABEL},
     api_to_enable="Google Sheets API",
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         search_tool("google_sheets__search_spreadsheets", "Google Sheets spreadsheets", MIME_SHEET),
         ToolDef(

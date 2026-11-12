@@ -7,6 +7,7 @@ import type { Workflow, WorkflowNode } from "@/lib/workflow-schema";
 import {
   workflowsApi, type ConnectionLite, type NodeRecord, type NodeType, type Operation, type TestResult, type Trigger,
 } from "@/lib/workflows";
+import { dependentsOf, uiOf } from "@/lib/options";
 import { ParamField } from "./ParamField";
 import { ScheduleEditor, type ScheduleParams } from "./ScheduleEditor";
 
@@ -27,6 +28,8 @@ type Props = {
   workflow: Workflow;
   node: WorkflowNode | null;
   nodeType: NodeType | undefined;
+  /** Every operation of the node's app (for the Resource and Operation dropdowns). */
+  siblings?: NodeType[];
   published: boolean;
   lastRun: NodeRecord | undefined;
   triggers: Trigger[];
@@ -66,7 +69,7 @@ function WorkflowSettings({ workflow, onApply }: { workflow: Workflow; onApply: 
   );
 }
 
-function NodeConfig({ workflowId, node, nodeType, published, lastRun, triggers, onApply, onDeleteNode, onTested }: Props & { node: WorkflowNode }) {
+function NodeConfig({ workflowId, node, nodeType, siblings = [], published, lastRun, triggers, onApply, onDeleteNode, onTested }: Props & { node: WorkflowNode }) {
   const [connections, setConnections] = useState<ConnectionLite[]>([]);
   const [name, setName] = useState(node.name);
   const [test, setTest] = useState<TestResult | null>(null);
@@ -81,8 +84,20 @@ function NodeConfig({ workflowId, node, nodeType, published, lastRun, triggers, 
 
   const props = nodeType?.parameters.properties ?? {};
   const required = new Set(nodeType?.parameters.required ?? []);
-  const update = (key: string, value: unknown) =>
-    void onApply([{ op: "update_node", id: node.id, parameters: { [key]: value } }]);
+  // Changing a parent field clears the fields that depend on it (their choices came from the old value).
+  const update = (key: string, value: unknown) => {
+    const clear = dependentsOf(props, key).filter((k) => node.parameters[k] !== undefined);
+    void onApply([{ op: "update_node", id: node.id, parameters: { [key]: value }, ...(clear.length ? { remove_parameters: clear } : {}) }]);
+  };
+  // Every listed value belongs to one account, so switching account clears them all.
+  const changeAccount = (connectionId: string) => {
+    const clear = Object.keys(props).filter((k) => uiOf(props[k]) && node.parameters[k] !== undefined);
+    void onApply([{ op: "update_node", id: node.id, connection_id: connectionId || null, ...(clear.length ? { remove_parameters: clear } : {}) }]);
+  };
+  const switchOperation = (type: string) => void onApply([{ op: "update_node", id: node.id, type }]);
+  const resources = Array.from(new Set(siblings.map((s) => s.resource).filter((r): r is string => !!r)));
+  const operations = siblings.filter((s) => s.resource === nodeType?.resource);
+  const FIRST = ["List", "Get", "Search"];
 
   async function runTest(confirm: boolean) {
     setTesting(true);
@@ -127,7 +142,7 @@ function NodeConfig({ workflowId, node, nodeType, published, lastRun, triggers, 
               id="conn"
               className="w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700"
               value={node.connection_id ?? ""}
-              onChange={(e) => void onApply([{ op: "update_node", id: node.id, connection_id: e.target.value || null }])}
+              onChange={(e) => changeAccount(e.target.value)}
             >
               <option value="">Choose an account…</option>
               {mine.map((c) => <option key={c.id} value={c.id}>{c.account_label ?? c.provider}</option>)}
@@ -140,11 +155,48 @@ function NodeConfig({ workflowId, node, nodeType, published, lastRun, triggers, 
         </div>
       )}
 
+      {nodeType?.connector && siblings.length > 1 && (
+        <>
+          <label className="block space-y-1 text-xs font-medium">
+            Resource
+            <select
+              className="w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm font-normal dark:border-neutral-700"
+              value={nodeType.resource ?? ""}
+              onChange={(e) => {
+                const group = siblings.filter((s) => s.resource === e.target.value);
+                const target = group.find((s) => FIRST.includes(s.operation ?? "")) ?? group[0];
+                if (target) switchOperation(target.type);
+              }}
+            >
+              {resources.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
+          <label className="block space-y-1 text-xs font-medium">
+            Operation
+            <select
+              className="w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm font-normal dark:border-neutral-700"
+              value={nodeType.type}
+              onChange={(e) => switchOperation(e.target.value)}
+            >
+              {operations.map((o) => <option key={o.type} value={o.type}>{o.operation}</option>)}
+            </select>
+          </label>
+        </>
+      )}
+
       {node.type === "schedule_trigger" ? (
         <ScheduleEditor value={node.parameters as ScheduleParams} onChange={(v) => void onApply([{ op: "update_node", id: node.id, parameters: v as Record<string, unknown> }])} />
       ) : (
         Object.entries(props).map(([key, schema]) => (
-          <ParamField key={key} name={key} schema={schema} value={node.parameters[key]} required={required.has(key)} onCommit={update} />
+          <ParamField
+            key={key}
+            name={key}
+            schema={schema}
+            value={node.parameters[key]}
+            required={required.has(key)}
+            onCommit={update}
+            ctx={nodeType?.connector ? { nodeType: nodeType.type, connectionId: node.connection_id ?? null, parameters: node.parameters } : undefined}
+          />
         ))
       )}
 

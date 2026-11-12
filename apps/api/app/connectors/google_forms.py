@@ -80,6 +80,22 @@ async def list_responses(ctx: ToolContext, form_id: str, page_size: int) -> dict
     return {"responses": out, "more_available": bool(d.get("nextPageToken"))}
 
 
+from app.connectors._google import drive_search  # noqa: E402
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_forms(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    found = await drive_search(ctx, MIME_FORM, query, 25)
+    return [option(m["id"], m["name"], f"Edited {m['modified'][:10]}" if m.get("modified") else None, m.get("url"))
+            for m in found["matches"]]
+
+
+LOADERS = [LoaderDef(name="forms", description="Your forms, newest first (type to search by name).",
+                     handler=load_forms, scopes=[DRIVE_METADATA])]
+_FORM = {"kind": "locator", "loader": "forms", "modes": ["list", "url", "id"], "url_pattern": r"/d/([A-Za-z0-9_-]{20,})"}
+PARAM_UI = {f"google_forms__{t}": {"form_id": _FORM} for t in ("add_question", "list_responses")}
+
+
 MANIFEST = google_manifest(
     id="google_forms",
     name="Google Forms",
@@ -88,6 +104,7 @@ MANIFEST = google_manifest(
     core_scopes=[BODY, RESPONSES],
     api_to_enable="Google Forms API",
     scope_labels={BODY: "Forms (create and edit)", RESPONSES: "Form responses", DRIVE_METADATA: DRIVE_METADATA_LABEL},
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         search_tool("google_forms__search_forms", "Google Forms", MIME_FORM),
         ToolDef(

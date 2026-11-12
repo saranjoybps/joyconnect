@@ -65,6 +65,35 @@ async def delete_task(ctx: ToolContext, task_list_id: str, task_id: str) -> dict
     return {"deleted": True, "task_id": task_id}
 
 
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_task_lists(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_task_lists(ctx)
+    return [option(t["id"], t["title"]) for t in out["task_lists"]]
+
+
+async def load_tasks(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_tasks(ctx, params["task_list_id"], False)
+    return [option(t["id"], t.get("title"), t.get("due")) for t in out["tasks"]]
+
+
+LOADERS = [
+    LoaderDef(name="task_lists", description="Your task lists.", handler=load_task_lists,
+              scopes_of="google_tasks__list_task_lists"),
+    LoaderDef(name="tasks", description="Open tasks of a task list.", handler=load_tasks,
+              scopes_of="google_tasks__list_tasks", needs=["task_list_id"]),
+]
+_LIST = {"kind": "options", "loader": "task_lists"}
+_TASK = {"kind": "options", "loader": "tasks", "depends_on": ["task_list_id"]}
+PARAM_UI = {
+    "google_tasks__list_tasks": {"task_list_id": _LIST},
+    "google_tasks__create_task": {"task_list_id": _LIST},
+    "google_tasks__complete_task": {"task_list_id": _LIST, "task_id": _TASK},
+    "google_tasks__delete_task": {"task_list_id": _LIST, "task_id": _TASK},
+}
+
+
 MANIFEST = google_manifest(
     id="google_tasks",
     name="Google Tasks",
@@ -72,6 +101,7 @@ MANIFEST = google_manifest(
     scopes=[SCOPE],
     api_to_enable="Google Tasks API",
     health_tool="google_tasks__list_task_lists", health_args={},
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         ToolDef(name="google_tasks__list_task_lists", description="List the user's task lists (id and title).",
                 parameters=object_schema({}), risk="read", handler=list_task_lists),

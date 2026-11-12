@@ -109,6 +109,26 @@ async def search_files(ctx: ToolContext, query: str | None, limit: int | None) -
             "note": "Newest first. If several look right, ask the user which one."}
 
 
+from app.connectors._google import MIME_FOLDER, drive_search  # noqa: E402
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_folders(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    found = await drive_search(ctx, MIME_FOLDER, query, 25)
+    return [option(m["id"], m["name"], f"Edited {m['modified'][:10]}" if m.get("modified") else None, m.get("url"))
+            for m in found["matches"]]
+
+
+LOADERS = [LoaderDef(name="folders", description="Your folders, newest first (type to search by name).",
+                     handler=load_folders, scopes=[DRIVE_METADATA])]
+_FOLDER = {"kind": "options", "loader": "folders", "empty_label": "My Drive (top level)"}
+PARAM_UI = {
+    "google_drive__create_folder": {"parent_id": _FOLDER},
+    "google_drive__upload_text_file": {"parent_id": _FOLDER},
+    "google_drive__list_files": {"folder_id": _FOLDER},
+}
+
+
 MANIFEST = google_manifest(
     id="google_drive",
     name="Google Drive",
@@ -118,6 +138,7 @@ MANIFEST = google_manifest(
     scope_labels={DRIVE_METADATA: DRIVE_METADATA_LABEL},
     api_to_enable="Google Drive API",
     health_tool="google_drive__list_files", health_args={"name_contains": None, "folder_id": None, "page_size": 1},
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         ToolDef(
             name="google_drive__search_files",

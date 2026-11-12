@@ -83,6 +83,23 @@ async def insert_table(ctx: ToolContext, document_id: str, rows: int, columns: i
     return {"document_id": did, "rows": rows, "columns": columns}
 
 
+from app.connectors._google import drive_search  # noqa: E402
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_documents(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    found = await drive_search(ctx, MIME_DOC, query, 25)
+    return [option(m["id"], m["name"], f"Edited {m['modified'][:10]}" if m.get("modified") else None, m.get("url"))
+            for m in found["matches"]]
+
+
+LOADERS = [LoaderDef(name="documents", description="Your documents, newest first (type to search by name).",
+                     handler=load_documents, scopes=[DRIVE_METADATA])]
+_DOC = {"kind": "locator", "loader": "documents", "modes": ["list", "url", "id"], "url_pattern": r"/d/([A-Za-z0-9_-]{20,})"}
+PARAM_UI = {f"google_docs__{t}": {"document_id": _DOC}
+            for t in ("get_document", "append_text", "replace_text", "insert_table")}
+
+
 MANIFEST = google_manifest(
     id="google_docs",
     name="Google Docs",
@@ -91,6 +108,7 @@ MANIFEST = google_manifest(
     core_scopes=["https://www.googleapis.com/auth/documents"],
     scope_labels={DRIVE_METADATA: DRIVE_METADATA_LABEL},
     api_to_enable="Google Docs API",
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         search_tool("google_docs__search_documents", "Google Docs documents", MIME_DOC),
         ToolDef(

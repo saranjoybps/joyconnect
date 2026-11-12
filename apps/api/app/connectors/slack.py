@@ -87,6 +87,27 @@ async def post_message(ctx: ToolContext, channel: str, text: str) -> dict:
     return {"channel": data.get("channel"), "ts": data.get("ts")}
 
 
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_channels(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_channels(ctx)
+    return [option(c["id"], "#" + str(c["name"]), "bot is a member" if c.get("is_member") else "invite the bot first")
+            for c in out["channels"]]
+
+
+async def load_users(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_users(ctx)
+    return [option(u["id"], u.get("real_name") or u.get("name"), "@" + str(u.get("name"))) for u in out["users"]]
+
+
+LOADERS = [
+    LoaderDef(name="channels", description="Public channels.", handler=load_channels, scopes_of="slack__list_channels"),
+    LoaderDef(name="users", description="People in the workspace.", handler=load_users, scopes_of="slack__list_users"),
+]
+PARAM_UI = {"slack__post_message": {"channel": {"kind": "options", "loader": "channels"}}}
+
+
 MANIFEST = ConnectorManifest(
     id="slack",
     name="Slack",
@@ -123,6 +144,7 @@ MANIFEST = ConnectorManifest(
     account_label=account_label,
     revoke=revoke,
     health_tool="slack__list_channels", health_args={},
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         ToolDef(
             name="slack__list_channels",

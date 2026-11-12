@@ -65,6 +65,37 @@ async def create_card(ctx: ToolContext, list_id: str, name: str, description: st
     return {"id": c.get("id"), "name": c.get("name"), "url": c.get("url")}
 
 
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_boards(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_boards(ctx)
+    return [option(b["id"], b["name"], url=b.get("url")) for b in out["boards"]]
+
+
+async def load_lists(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    """Lists of one board, or (no board chosen) of every open board, labelled "Board > List"."""
+    if params.get("board_id"):
+        return [option(x["id"], x["name"]) for x in (await list_lists(ctx, params["board_id"]))["lists"]]
+    out: list[dict] = []
+    for b in (await list_boards(ctx))["boards"][:20]:
+        out += [option(x["id"], f"{b['name']} > {x['name']}") for x in (await list_lists(ctx, b["id"]))["lists"]]
+    return out
+
+
+LOADERS = [
+    LoaderDef(name="boards", description="Your open boards.", handler=load_boards),
+    LoaderDef(name="lists", description="The lists of a board (or of every board).", handler=load_lists),
+]
+_BOARD = {"kind": "locator", "loader": "boards", "modes": ["list", "url", "id"], "url_pattern": r"trello\.com/b/([A-Za-z0-9]+)"}
+_LIST = {"kind": "options", "loader": "lists"}
+PARAM_UI = {
+    "trello__list_lists": {"board_id": _BOARD},
+    "trello__list_cards": {"list_id": _LIST},
+    "trello__create_card": {"list_id": _LIST},
+}
+
+
 MANIFEST = api_key_manifest(
     id="trello", name="Trello",
     description="List boards, lists and cards, and create cards in Trello.",
@@ -80,6 +111,7 @@ MANIFEST = api_key_manifest(
                  "On the API key page click 'generate a Token' and allow read and write access.",
                  "Paste the key and the token here."],
     health_tool="trello__list_boards",
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         ToolDef(name="trello__list_boards", description="List the user's open Trello boards (names and ids). Use first to find a board by name; never ask the user for a board id.",
                 parameters=object_schema({}), risk="read", handler=list_boards),

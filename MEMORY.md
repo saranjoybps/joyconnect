@@ -1,7 +1,7 @@
 # MEMORY.md — project context for future sessions
 
 Keep under 150 lines. Update before finishing every session (state, decisions, issues, next steps).
-Last updated: 2026-11-12, after Step 5 (canvas + chat modes).
+Last updated: 2026-11-12, after load options / resource locators.
 
 ## 1. What we are building
 A **chat-first workflow platform**: connectors become nodes; users build workflows by chat or by drag and drop
@@ -55,6 +55,10 @@ Revision plan (CLAUDE.md section 5): workflow engine in steps 1-7 below. Progres
   parallel read calls. All tests use mocked LLM/embedder. **Migration 0008 must be applied by the owner**
   (`cd apps/api; .venv\Scripts\python.exe scripts\apply_migrations.py`); until then memory/usage degrade silently.
   Existing Google connections show Partial access until reconnected (new scope); Slack needs `users:read`.
+- [x] Load options (2026-11-12): connector `loaders` + `param_ui` (x-ui), `POST /api/nodes/{type}/options` (60 s cache, refresh),
+  canvas: account, Resource, Operation, then dropdown / resource locator (list, URL, ID) / multi-select / tab range / column mapper;
+  parent change clears children (`remove_parameters`), operation switch (`update_node.type`). Loaders wrap the same handlers as the chat
+  discovery tools. No loaders for Stripe, Meet, Contacts. Tests: api 619, web 141, all mocked.
 - [ ] Step 6 chat workflow tools + diff review + delete approval · Step 7 AI Agent / LLM / Classify / Extract / Approval nodes.
   Not done from the plan: Runs page grouped by workflow/node (CLAUDE.md 5.9), chat-generated workflow opening on the canvas (step 6).
 

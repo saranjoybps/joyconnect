@@ -58,7 +58,9 @@ class UpdateNode(_Op):
     op: Literal["update_node"]
     id: str                                   # node id, or its exact name
     name: str | None = None
+    type: str | None = None                   # switch an app node to another operation of the same connector
     parameters: dict[str, Any] | None = None  # merged into the existing parameters (shallow)
+    remove_parameters: list[str] | None = None  # keys deleted from the parameters (used to clear dependent fields)
     replace: bool = False                     # True: `parameters` replaces them instead
     connection_id: str | None = None
     settings: dict[str, Any] | None = None
@@ -191,6 +193,17 @@ def apply_operations(doc: Doc, operations: list[Any], registry: NodeRegistry | N
             node = _find(out, op.id, i)
             if op.name is not None:
                 node["name"] = op.name
+            if op.type is not None and op.type != node["type"]:
+                old, new = registry.get(node["type"]), registry.get(op.type)
+                if new is None:
+                    raise PatchError(f"operation {i}: unknown node type '{op.type}'", i)
+                if old is None or old.connector is None or old.connector != new.connector:
+                    raise PatchError(f"operation {i}: a node can only switch to another operation of the same app", i)
+                keep = set(new.parameters.get("properties", {}))
+                node["type"] = op.type
+                node["parameters"] = {k: v for k, v in node["parameters"].items() if k in keep}
+            for key in op.remove_parameters or []:
+                node["parameters"].pop(key, None)
             if op.parameters is not None:
                 node["parameters"] = dict(op.parameters) if op.replace else {**node["parameters"], **op.parameters}
             if op.clear_connection:

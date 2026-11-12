@@ -273,6 +273,7 @@ function Editor({ id }: { id: string }) {
           workflow={workflow}
           node={node}
           nodeType={node ? typeMap.get(node.type) : undefined}
+          siblings={node && typeMap.get(node.type)?.connector ? types.filter((t) => t.connector === typeMap.get(node.type)?.connector) : []}
           published={published}
           lastRun={node ? results[node.id] : undefined}
           triggers={triggers}

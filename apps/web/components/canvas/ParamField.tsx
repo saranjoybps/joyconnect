@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { uiOf } from "@/lib/options";
 import type { JsonSchema } from "@/lib/workflows";
+import { OptionField, type OptionCtx } from "./OptionFields";
 
 const INPUT =
   "w-full rounded-md border border-neutral-300 bg-transparent px-2 py-1.5 text-sm dark:border-neutral-700";
@@ -30,14 +32,23 @@ export function ParamField({
   value,
   required,
   onCommit,
+  ctx,
 }: {
   name: string;
   schema: JsonSchema;
   value: unknown;
   required: boolean;
   onCommit: (key: string, value: unknown) => void;
+  /** App nodes: what the option loaders need (node type, chosen account, current parameters). */
+  ctx?: OptionCtx;
 }) {
   const id = useId();
+  const ui = uiOf(schema);
+  if (ui && ctx) {
+    return (
+      <OptionField name={name} label={name.replace(/_/g, " ")} required={required} hint={schema.description} spec={ui} value={value} ctx={ctx} onCommit={onCommit} />
+    );
+  }
   const type = baseType(schema);
   const label = name.replace(/_/g, " ");
   const hint = schema.description;

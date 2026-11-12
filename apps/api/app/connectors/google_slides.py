@@ -100,6 +100,38 @@ async def add_text(ctx: ToolContext, presentation_id: str, slide_id: str, text: 
     return {"presentation_id": pid, "slide_id": slide, "text_box_id": box}
 
 
+from app.connectors._google import drive_search  # noqa: E402
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_presentations(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    found = await drive_search(ctx, MIME_SLIDES, query, 25)
+    return [option(m["id"], m["name"], f"Edited {m['modified'][:10]}" if m.get("modified") else None, m.get("url"))
+            for m in found["matches"]]
+
+
+async def load_slides(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await get_presentation(ctx, params["presentation_id"])
+    return [option(s["slide_id"], f"Slide {i + 1}", " / ".join(s.get("text") or [])[:80] or None)
+            for i, s in enumerate(out["slides"])]
+
+
+LOADERS = [
+    LoaderDef(name="presentations", description="Your presentations, newest first (type to search by name).",
+              handler=load_presentations, scopes=[DRIVE_METADATA]),
+    LoaderDef(name="slides", description="The slides of a presentation.", handler=load_slides,
+              needs=["presentation_id"]),
+]
+_PRES = {"kind": "locator", "loader": "presentations", "modes": ["list", "url", "id"], "url_pattern": r"/d/([A-Za-z0-9_-]{20,})"}
+PARAM_UI = {
+    "google_slides__get_presentation": {"presentation_id": _PRES},
+    "google_slides__add_slide": {"presentation_id": _PRES},
+    "google_slides__add_text": {
+        "presentation_id": _PRES,
+        "slide_id": {"kind": "options", "loader": "slides", "depends_on": ["presentation_id"]}},
+}
+
+
 MANIFEST = google_manifest(
     id="google_slides",
     name="Google Slides",
@@ -108,6 +140,7 @@ MANIFEST = google_manifest(
     core_scopes=["https://www.googleapis.com/auth/presentations"],
     scope_labels={DRIVE_METADATA: DRIVE_METADATA_LABEL},
     api_to_enable="Google Slides API",
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         search_tool("google_slides__search_presentations", "Google Slides presentations", MIME_SLIDES),
         ToolDef(

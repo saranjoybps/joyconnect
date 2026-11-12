@@ -16,8 +16,9 @@ from app.core.secrets import SecretStore, build_secret_store
 from app.db.client import Database, SupabaseRestDatabase
 from app.oauth import router as oauth_router
 from app.routers import (
-    approvals, chat, connections, executions, health, hooks, memory, provider_apps, runs, workflows,
+    approvals, chat, connections, executions, health, hooks, memory, options, provider_apps, runs, workflows,
 )
+from app.workflows.options import OptionsService
 from app.workflows.runtime import build_workflow_runtime
 
 
@@ -55,6 +56,7 @@ def create_app(
 
         app.state.runtime = AgentRuntime(app.state.db, app.state.secret_store, app.state.http, settings, llm_factory,
                                          embedder_factory)
+        app.state.options = OptionsService(app.state.db, app.state.runtime.executor)
         rt = build_workflow_runtime(app.state.db, app.state.secret_store, app.state.http, settings, llm_factory)
         app.state.wf_runtime, app.state.workflows, app.state.executions = rt, rt.workflows, rt.executions
         app.state.triggers, app.state.settings = rt.triggers, settings
@@ -78,6 +80,7 @@ def create_app(
     app.include_router(chat.router)
     app.include_router(approvals.router)
     app.include_router(memory.router)
+    app.include_router(options.router)
     app.include_router(provider_apps.router)
     app.include_router(runs.router)
     app.include_router(workflows.router)

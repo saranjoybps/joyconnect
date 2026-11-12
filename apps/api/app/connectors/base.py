@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.config import Settings
 
@@ -179,6 +179,36 @@ class ToolDef(BaseModel):
         return v
 
 
+LoaderHandler = Callable[["ToolContext", dict[str, Any], str | None], Awaitable[list[dict[str, Any]]]]
+
+
+class LoaderDef(BaseModel):
+    """Loads the choices for one node parameter from the connected account (n8n's "load options").
+
+    `handler(ctx, params, query)` returns a list of options `{value, name, description?, url?}`. `params` holds
+    the loader's inputs (for example `spreadsheet_id`), `query` is optional type-ahead text. Handlers reuse the
+    connector's own tool handlers, so the chat agent's discovery tools and the canvas dropdowns share one code
+    path. `scopes` is what the token needs; empty means the connector's functional scopes."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    name: str
+    description: str
+    handler: LoaderHandler
+    scopes: list[str] = Field(default_factory=list)
+    scopes_of: str | None = None                         # inherit the scopes of this tool of the connector
+    needs: list[str] = Field(default_factory=list)        # loader inputs that must be present
+
+
+def option(value: Any, name: Any = None, description: str | None = None, url: str | None = None) -> dict[str, Any]:
+    out: dict[str, Any] = {"value": value, "name": str(name if name not in (None, "") else value)}
+    if description:
+        out["description"] = str(description)
+    if url:
+        out["url"] = url
+    return out
+
+
 class CredentialField(BaseModel):
     """One input on the connector's Set up form."""
 
@@ -246,6 +276,10 @@ class ConnectorManifest(BaseModel):
     pkce: bool = True
     revoke_url: str | None = None
     tools: list[ToolDef] = Field(default_factory=list)
+    # Choices the canvas can load from the account, and which node parameters use them:
+    # param_ui[tool_name][param] = {"kind": locator|options|multi|columns|range, "loader": ..., "depends_on": [...]}
+    loaders: list[LoaderDef] = Field(default_factory=list)
+    param_ui: dict[str, dict[str, dict[str, Any]]] = Field(default_factory=dict)
 
     # Credentials the user enters on the Set up form (or PLATFORM_<APP>_<FIELD> env defaults).
     credential_fields: list[CredentialField] = Field(default_factory=list)
@@ -287,6 +321,14 @@ class ConnectorManifest(BaseModel):
     health_args: dict[str, Any] = Field(default_factory=dict)
     health: Callable[..., Awaitable[Any]] | None = None
 
+    @model_validator(mode="after")
+    def _loader_scopes(self) -> "ConnectorManifest":
+        by_name = {t.name: t for t in self.tools}
+        for l in self.loaders:
+            if l.scopes_of and not l.scopes and l.scopes_of in by_name:
+                l.scopes = list(by_name[l.scopes_of].scopes)
+        return self
+
     def functional_scopes(self) -> list[str]:
         """Requested scopes that tools need (everything except identity scopes)."""
         return [s for s in self.scopes if normalize_scope(s) not in IDENTITY_SCOPES]
@@ -325,6 +367,12 @@ class ConnectorManifest(BaseModel):
         for t in self.tools:
             if t.name == name:
                 return t
+        raise KeyError(name)
+
+    def loader(self, name: str) -> LoaderDef:
+        for l in self.loaders:
+            if l.name == name:
+                return l
         raise KeyError(name)
 
 

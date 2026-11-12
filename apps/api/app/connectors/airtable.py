@@ -82,6 +82,44 @@ async def create_record(ctx: ToolContext, base_id: str, table: str, fields_json:
     return {"id": rec.get("id"), "fields": rec.get("fields", {})}
 
 
+from app.connectors.base import LoaderDef, option  # noqa: E402
+
+
+async def load_bases(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_bases(ctx)
+    return [option(b["id"], b["name"], b.get("permission")) for b in out["bases"]]
+
+
+async def load_tables(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    out = await list_tables(ctx, params["base_id"])
+    return [option(t["id"], t["name"], f"{len(t['fields'])} fields") for t in out["tables"]]
+
+
+async def load_fields(ctx: ToolContext, params: dict, query: str | None) -> list[dict]:
+    """Fields of one table, in the order Airtable lists them (the mapper's rows)."""
+    want = (params.get("table") or "").strip()
+    for t in (await list_tables(ctx, params["base_id"]))["tables"]:
+        if want in (t["id"], t["name"]):
+            return [option(f["name"], f["name"], f.get("type")) for f in t["fields"]]
+    return []
+
+
+LOADERS = [
+    LoaderDef(name="bases", description="Your Airtable bases.", handler=load_bases),
+    LoaderDef(name="tables", description="The tables of a base.", handler=load_tables, needs=["base_id"]),
+    LoaderDef(name="fields", description="The fields of a table.", handler=load_fields, needs=["base_id", "table"]),
+]
+_BASE = {"kind": "locator", "loader": "bases", "modes": ["list", "url", "id"], "url_pattern": r"/(app[A-Za-z0-9]{14})"}
+_TABLE = {"kind": "options", "loader": "tables", "depends_on": ["base_id"]}
+PARAM_UI = {
+    "airtable__list_tables": {"base_id": _BASE},
+    "airtable__list_records": {"base_id": _BASE, "table": _TABLE},
+    "airtable__create_record": {
+        "base_id": _BASE, "table": _TABLE,
+        "fields_json": {"kind": "columns", "loader": "fields", "depends_on": ["base_id", "table"], "output": "json"}},
+}
+
+
 MANIFEST = api_key_manifest(
     id="airtable", name="Airtable",
     description="Find your bases and tables, read records and add records.",
@@ -95,6 +133,7 @@ MANIFEST = api_key_manifest(
                  "Add scopes schema.bases:read, data.records:read and data.records:write.",
                  "Under Access, choose the bases this app may use, create the token and paste it here."],
     health_tool="airtable__list_bases",
+    loaders=LOADERS, param_ui=PARAM_UI,
     tools=[
         ToolDef(name="airtable__list_bases", description="List the Airtable bases the token can access (names and ids). "
                                                   "Use first; never ask the user for a base id.",
