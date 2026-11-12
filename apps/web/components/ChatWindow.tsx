@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { ActionCard } from "@/components/ActionCard";
 import { ApprovalPrompt } from "@/components/ApprovalPrompt";
+import { Markdown } from "@/components/Markdown";
 import { applyEvent, chatApi, itemsFromDetail, type ChatItem, type Conversation } from "@/lib/chat";
 import { connectionsApi } from "@/lib/connections";
 import type { SseEvent } from "@/lib/sse";
@@ -85,11 +87,11 @@ export function ChatWindow() {
     }
   }
 
-  async function send(e?: FormEvent) {
+  async function send(e?: FormEvent, override?: string) {
     e?.preventDefault();
-    const text = input.trim();
+    const text = (override ?? input).trim();
     if (!text || busy) return;
-    setInput("");
+    if (override === undefined) setInput("");
     setError(null);
     setBusy(true);
     setItems((prev) => [...prev, { kind: "user", text }]);
@@ -126,6 +128,8 @@ export function ChatWindow() {
       void send();
     }
   }
+
+  const lastUserText = [...items].reverse().find((i) => i.kind === "user")?.text;
 
   const hasPending = items.some((i) => i.kind === "approval" && (i.state === "pending" || i.state === "submitting"));
 
@@ -190,17 +194,10 @@ export function ChatWindow() {
               case "user":
                 return <p key={idx} className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap rounded-2xl bg-neutral-900 px-3 py-2 text-white dark:bg-neutral-100 dark:text-neutral-900">{item.text}</p>;
               case "assistant":
-                return <p key={idx} className="max-w-[85%] whitespace-pre-wrap break-words">{item.text}</p>;
+                return <Markdown key={idx} text={item.text} />;
               case "tool":
-                return (
-                  <p key={idx} className="flex w-fit items-center gap-2 rounded-full border border-neutral-200 px-3 py-1 text-xs dark:border-neutral-700">
-                    <span aria-hidden="true">{item.status === "running" ? "⏳" : item.status === "ok" ? "✓" : "✕"}</span>
-                    <span>
-                      {item.label}{item.status === "running" ? "…" : ""}
-                      {item.status === "error" && item.summary ? <span className="text-red-700 dark:text-red-400"> — {item.summary}</span> : null}
-                    </span>
-                  </p>
-                );
+                return <ActionCard key={idx} label={item.label} status={item.status} summary={item.summary} action={item.action}
+                  onRetry={lastUserText ? () => void send(undefined, lastUserText) : undefined} retryDisabled={busy} />;
               case "approval":
                 return <ApprovalPrompt key={item.approval.approval_id} approval={item.approval} state={item.state}
                   onDecide={(approve) => decide(item.approval.approval_id, approve)} />;

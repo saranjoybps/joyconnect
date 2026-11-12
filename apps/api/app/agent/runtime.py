@@ -15,6 +15,7 @@ import httpx
 from app.agent.llm import LLM, LLMError, LLMResult
 from app.agent.policy import build_preview, decide, redact_args, redact_result, scrub, tool_label
 from app.agent.prompts import system_prompt
+from app.agent.response import build_action
 from app.agent.tools import (
     MAX_RESULT_CHARS, BoundTool, ToolExecutor, available_tools, log_scope_mismatch, pick_connection,
     to_openai_tool, validate_args,
@@ -28,6 +29,7 @@ log = logging.getLogger(__name__)
 Event = dict[str, Any]
 HISTORY_LIMIT = 40
 DECLINED = {"error": "The user declined this action."}
+INTERRUPTED = {"error": "This action did not complete (it was interrupted). Nothing was confirmed."}
 
 
 class AgentError(Exception):
@@ -45,10 +47,44 @@ def _result_text(result: Any) -> str:
     return text if len(text) <= MAX_RESULT_CHARS else text[:MAX_RESULT_CHARS] + '…"(truncated)"'
 
 
+def _result_ev(call_id: str, tool: str, ok: bool, result: Any, summary: str | None = None) -> Event:
+    """tool_result event: the legacy fields plus the validated Action (`action`), when it validates."""
+    action = build_action(call_id, tool, ok, result)
+    return _ev("tool_result", id=call_id, tool=tool, ok=ok, summary=summary if summary is not None
+               else _summary(ok, result), action=action.model_dump() if action else None)
+
+
 def _summary(ok: bool, result: Any) -> str:
     if not ok and isinstance(result, dict):
         return str(result.get("error", "error"))[:200]
     return _result_text(result)[:200]
+
+
+def _repair_tool_exchanges(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Make the stored history a valid OpenAI conversation: every assistant tool_call gets exactly one
+    tool message right after it, and tool messages without a call are dropped.
+
+    A turn can be cut short (server restart, client disconnect, database error) after the assistant
+    message with tool_calls was saved but before the tool result was. Replaying that history makes
+    OpenAI answer 400 on every later message, so the chat would be dead for good. A call with no
+    result becomes a tool message saying it did not complete."""
+    out: list[dict[str, Any]] = []
+    expected: set[str] = set()
+    for r in rows:
+        if r["role"] == "tool":
+            if r.get("tool_call_id") in expected:
+                expected.discard(r["tool_call_id"])
+                out.append(r)
+            continue  # orphan tool message: drop
+        for cid in sorted(expected):  # earlier calls never answered
+            out.append({"role": "tool", "tool_call_id": cid, "content": _result_text(INTERRUPTED)})
+        expected = set()
+        out.append(r)
+        if r["role"] == "assistant":
+            expected = {c["id"] for c in r.get("tool_calls") or []}
+    for cid in sorted(expected):
+        out.append({"role": "tool", "tool_call_id": cid, "content": _result_text(INTERRUPTED)})
+    return out
 
 
 class AgentRuntime:
@@ -106,7 +142,7 @@ class AgentRuntime:
         if not approve:
             await self._finish_call(user_id, conversation_id, approval["tool_run_id"], tool_call_id,
                                     False, DECLINED, "rejected")
-            yield _ev("tool_result", id=tool_call_id, tool=preview["tool"], ok=False, summary="Declined by you")
+            yield _result_ev(tool_call_id, preview["tool"], False, DECLINED, "Declined by you")
         else:
             await self.db.update("tool_runs", {"id": approval["tool_run_id"]}, {"status": "approved"})
             bound = await self._bind(user_id, preview["tool"])
@@ -119,7 +155,7 @@ class AgentRuntime:
                 ok, result, ms = await self.executor.execute_timed(bound, args)
             await self._finish_call(user_id, conversation_id, approval["tool_run_id"], tool_call_id, ok, result,
                                     "ok" if ok else "error", ms)
-            yield _ev("tool_result", id=tool_call_id, tool=preview["tool"], ok=ok, summary=_summary(ok, result))
+            yield _result_ev(tool_call_id, preview["tool"], ok, result)
 
         if await self._pending_approvals(user_id, conversation_id):
             yield _ev("done", conversation_id=conversation_id)
@@ -191,6 +227,32 @@ class AgentRuntime:
 
     async def _handle_call(self, user_id: str, conversation_id: str, call: dict[str, Any],
                            tools: dict[str, BoundTool]) -> AsyncIterator[Event]:
+        """Run one tool call. Whatever goes wrong inside, the call ends with a tool message (or a pending
+        approval): an assistant tool_call without a tool result makes OpenAI reject every later turn."""
+        call_id, name = call["id"], call["function"]["name"]
+        try:
+            async for ev in self._handle_call_inner(user_id, conversation_id, call, tools):
+                yield ev
+        except Exception as exc:  # noqa: BLE001
+            log.exception("tool call %s failed: %s", name, type(exc).__name__)
+            problem = {"error": "This action could not be completed because of an internal error."}
+            try:
+                if not await self._call_settled(conversation_id, call_id):
+                    await self._save_message(user_id, conversation_id, "tool", content=_result_text(problem),
+                                             tool_call_id=call_id)
+            except Exception:  # noqa: BLE001 — _history() repairs it on the next turn
+                log.exception("could not record the failed tool call")
+            yield _result_ev(call_id, name, False, problem)
+
+    async def _call_settled(self, conversation_id: str, call_id: str) -> bool:
+        """True if the call has a tool message, or is waiting on a pending approval."""
+        if await self.db.select("messages", {"conversation_id": conversation_id, "tool_call_id": call_id}):
+            return True
+        return any(a["preview"].get("tool_call_id") == call_id
+                   for a in await self.db.select("approvals", {"status": "pending"}))
+
+    async def _handle_call_inner(self, user_id: str, conversation_id: str, call: dict[str, Any],
+                                 tools: dict[str, BoundTool]) -> AsyncIterator[Event]:
         call_id, name = call["id"], call["function"]["name"]
         bound = tools.get(name)
         try:
@@ -208,7 +270,7 @@ class AgentRuntime:
         if problem:
             await self._save_message(user_id, conversation_id, "tool", content=_result_text({"error": problem}),
                                      tool_call_id=call_id)
-            yield _ev("tool_result", id=call_id, tool=name, ok=False, summary=problem)
+            yield _result_ev(call_id, name, False, {"error": problem}, problem)
             return
 
         if await self._tool_limit_reached(user_id):
@@ -217,8 +279,8 @@ class AgentRuntime:
                                "resets at midnight UTC and nothing was done."}
             await self._save_message(user_id, conversation_id, "tool", content=_result_text(result),
                                      tool_call_id=call_id)
-            yield _ev("tool_result", id=call_id, tool=name, ok=False,
-                      summary=f"Daily limit of {limit} tool runs reached (resets at midnight UTC)")
+            yield _result_ev(call_id, name, False, result,
+                             f"Daily limit of {limit} tool runs reached (resets at midnight UTC)")
             return
 
         run = await self.db.insert("tool_runs", {
@@ -232,7 +294,7 @@ class AgentRuntime:
             ok, result = False, {"error": bound.scope_error()}
             log_scope_mismatch(bound)
             await self._finish_call(user_id, conversation_id, run["id"], call_id, ok, result, "error")
-            yield _ev("tool_result", id=call_id, tool=name, ok=ok, summary=_summary(ok, result))
+            yield _result_ev(call_id, name, ok, result)
             return
 
         if decide(bound.tool.risk, bound.auto_approve) == "ask":
@@ -247,7 +309,7 @@ class AgentRuntime:
         yield self._tool_call_event(call_id, bound)
         ok, result, ms = await self.executor.execute_timed(bound, args)
         await self._finish_call(user_id, conversation_id, run["id"], call_id, ok, result, "ok" if ok else "error", ms)
-        yield _ev("tool_result", id=call_id, tool=name, ok=ok, summary=_summary(ok, result))
+        yield _result_ev(call_id, name, ok, result)
 
     # ------------------------------------------------------------------ persistence helpers
 
@@ -303,6 +365,7 @@ class AgentRuntime:
             rows = rows[1:]
         names = sorted({b.manifest.name for b in tools.values()})
         out: list[dict[str, Any]] = [{"role": "system", "content": system_prompt(names)}]
+        rows = _repair_tool_exchanges(rows)
         for r in rows:
             if r["role"] == "assistant":
                 msg: dict[str, Any] = {"role": "assistant", "content": r.get("content")}

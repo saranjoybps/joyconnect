@@ -6,6 +6,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.agent.response import action_from_message, plain_summary
 from app.agent.runtime import AgentRuntime
 from app.core.ratelimit import chat_rate_limit
 from app.core.security import UserDep
@@ -58,14 +59,17 @@ async def get_conversation(conversation_id: str, user: UserDep, db: DbDep) -> di
             items.append({"kind": "user", "text": r.get("content") or ""})
         elif r["role"] == "assistant":
             if r.get("content"):
-                items.append({"kind": "assistant", "text": r["content"]})
+                items.append({"kind": "assistant", "text": plain_summary(r["content"])})
             for c in r.get("tool_calls") or []:
                 calls[c["id"]] = c["function"]["name"]
         elif r["role"] == "tool":
             result = _tool_name(r.get("content"))
             ok = not (isinstance(result, dict) and "error" in result)
-            items.append({"kind": "tool", "id": r.get("tool_call_id"), "tool": calls.get(r.get("tool_call_id"), ""),
-                          "ok": ok, "summary": None if ok else str(result.get("error"))})
+            tool = calls.get(r.get("tool_call_id"), "")
+            action = action_from_message(str(r.get("tool_call_id")), tool, r.get("content")) if tool else None
+            items.append({"kind": "tool", "id": r.get("tool_call_id"), "tool": tool,
+                          "ok": ok, "summary": None if ok else str(result.get("error")),
+                          "action": action.model_dump() if action else None})
     approvals = [
         {"approval_id": a["id"], **a["preview"]}
         for a in await db.select("approvals", {"user_id": user.id, "status": "pending"})

@@ -20,10 +20,23 @@ export type ApprovalPreview = {
   args: Record<string, unknown>;
 };
 
+/** Validated record of one tool call, built by the API from the audited tool result. */
+export type Action = {
+  id: string;
+  connector: string;
+  connector_name: string;
+  tool: string;
+  label: string;
+  ok: boolean;
+  result: string;
+  link: string | null;
+  error_kind: "auth" | "scope" | "server" | "other" | null;
+};
+
 export type ChatItem =
   | { kind: "user"; text: string }
   | { kind: "assistant"; text: string }
-  | { kind: "tool"; id: string; tool: string; label: string; status: "running" | "ok" | "error"; summary?: string | null }
+  | { kind: "tool"; id: string; tool: string; label: string; status: "running" | "ok" | "error"; summary?: string | null; action?: Action | null }
   | { kind: "approval"; approval: ApprovalPreview; state: "pending" | "submitting" | "approved" | "rejected" }
   | { kind: "error"; text: string };
 
@@ -34,7 +47,7 @@ export type ConversationDetail = {
   title: string | null;
   items: (
     | { kind: "user" | "assistant"; text: string }
-    | { kind: "tool"; id: string; tool: string; ok: boolean; summary: string | null }
+    | { kind: "tool"; id: string; tool: string; ok: boolean; summary: string | null; action?: Action | null }
   )[];
   pending_approvals: ApprovalPreview[];
 };
@@ -48,7 +61,7 @@ export function labelFor(tool: string): string {
 export function itemsFromDetail(detail: ConversationDetail): ChatItem[] {
   const items: ChatItem[] = detail.items.map((i) =>
     i.kind === "tool"
-      ? { kind: "tool", id: i.id, tool: i.tool, label: labelFor(i.tool), status: i.ok ? "ok" : "error", summary: i.summary }
+      ? { kind: "tool", id: i.id, tool: i.tool, label: labelFor(i.tool), status: i.ok ? "ok" : "error", summary: i.summary, action: i.action ?? null }
       : { kind: i.kind, text: i.text },
   );
   for (const a of detail.pending_approvals) items.push({ kind: "approval", approval: a, state: "pending" });
@@ -76,11 +89,12 @@ export function applyEvent(items: ChatItem[], ev: SseEvent): ChatItem[] {
       const idx = items.findIndex((i) => i.kind === "tool" && i.id === d.id);
       const status = d.ok ? "ok" : "error";
       const summary = d.ok ? null : String(d.summary ?? "");
+      const action = (d.action as Action | null | undefined) ?? null;
       if (idx === -1) {
-        return [...items, { kind: "tool", id: String(d.id), tool: String(d.tool), label: labelFor(String(d.tool)), status, summary }];
+        return [...items, { kind: "tool", id: String(d.id), tool: String(d.tool), label: labelFor(String(d.tool)), status, summary, action }];
       }
       const next = [...items];
-      next[idx] = { ...(next[idx] as Extract<ChatItem, { kind: "tool" }>), status, summary };
+      next[idx] = { ...(next[idx] as Extract<ChatItem, { kind: "tool" }>), status, summary, action };
       return next;
     }
     case "approval_required":
