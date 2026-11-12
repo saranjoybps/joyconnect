@@ -57,9 +57,11 @@ export type NodeRecord = {
   duration_ms: number | null;
   attempts: number;
 };
+export type PendingApproval = { approval_id: string; [k: string]: unknown };
 export type Execution = {
   execution: { id: string; status: string; mode: string; error: { message?: string } | null; cost_usd: number };
   nodes: NodeRecord[];
+  pending_approvals?: PendingApproval[];
 };
 export type TestResult = {
   status?: string;
@@ -109,6 +111,8 @@ export const workflowsApi = {
       body: JSON.stringify({ confirm }),
     }),
   execution: (executionId: string) => apiFetch<Execution>(`/api/executions/${enc(executionId)}`),
+  decide: (approvalId: string, approve: boolean) =>
+    apiFetch<unknown>(`/api/execution-approvals/${enc(approvalId)}/decision`, { method: "POST", body: JSON.stringify({ approve }) }),
   triggers: (id: string) => apiFetch<Trigger[]>(`/api/workflows/${enc(id)}/triggers`),
   rotateSecret: (id: string, nodeId: string) =>
     apiFetch<{ secret: string }>(`/api/workflows/${enc(id)}/triggers/${enc(nodeId)}/rotate-secret`, { method: "POST" }),
