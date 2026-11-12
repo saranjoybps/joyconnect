@@ -45,3 +45,14 @@ export function BrandLogo({ id, name, size = 20, className = "" }: { id: string;
     </span>
   );
 }
+
+/** The bare full-colour mark (no tile), for placing inside a LogoTile. Null when the brand is not in Simple Icons. */
+export function BrandMark({ id, name, size = 16 }: { id: string; name?: string; size?: number }) {
+  const icon = ICONS[id];
+  if (!icon) return null;
+  return (
+    <svg role="img" aria-label={`${name ?? icon.title} logo`} viewBox="0 0 24 24" width={size} height={size} fill={`#${icon.hex}`}>
+      <path d={icon.path} />
+    </svg>
+  );
+}

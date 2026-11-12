@@ -105,3 +105,16 @@ Docs: CLAUDE.md (design + rules), docs/decisions.md, README.md (setup, provider 
   Slack and Google Contacts are not in the package, so they use a gradient monogram (no recreated logo).
 - New `/settings` page; every module (shell, chat, Connections, Workflows list/canvas, Runs, Memory, Settings, Login) uses the glass style.
 - Tests: API 621+ passed; web 168 passed; `next build` passes.
+
+## Design direction v3 (2026-11-12, IN REVIEW: preview built, waiting for owner approval)
+- The owner found the glassmorphism UI "childish". New direction: premium, restrained, calm, technical (Linear / Vercel /
+  Raycast / Perplexity / Claude). Dark primary (#0A0A0F base, layered surfaces, 1px hairlines at 6-10% white), light =
+  warm off-white. ONE indigo-violet accent, desaturated status colours, no big gradients/rainbow. Radii 8-12px, 32-36px
+  buttons, 13-14px text, Geist + Geist Mono, Lucide icons (16-18px). Glass ONLY on floating layers (modal, popover,
+  command palette, composer), with a solid fallback. Motion 120-200ms, honour prefers-reduced-motion.
+- AI-native: streaming cursor, thinking shimmer, agent activity timeline, tool/source chips, status bar (mode, model,
+  memory), Cmd/Ctrl+K palette, shortcut hints. Canvas: dotted grid, slim nodes with logo tile, animated flow while running.
+- Tokens are namespaced `--p-*` / `p-*` Tailwind colours in `globals.css`; components live in `apps/web/components/pro/`.
+  Preview route `/design` (dev only, 404 in production). `npm run contrast` also runs `scripts/contrast-pro.mjs`.
+- NOT yet applied to the app: the glass UI of the previous section is still what the modules use. After approval: migrate
+  every module to `components/pro/*`, drop the old glass tokens/aurora, keep behaviour and tests unchanged.
