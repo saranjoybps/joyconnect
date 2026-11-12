@@ -12,6 +12,8 @@ dependencies = [
   "pyjwt[crypto]>=2.9",
   "openai>=3.0",
   "mcp>=2.0",
+  "jsonschema>=4.21",   # validates workflows against the shared schemas/workflow.schema.json
+  "tzdata>=2024.1",     # IANA time zones for schedule triggers on Windows
 ]
 
 [project.optional-dependencies]

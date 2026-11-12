@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://connect.local/schemas/workflow.schema.json",
+  "title": "Workflow",
+  "description": "The single source of truth for a workflow. Validated identically by the API and the web app. Rules a schema cannot express (unique ids and names, edges that point at real nodes and valid outputs) are enforced by the API after every patch.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "status", "version", "nodes", "edges"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "status": { "enum": ["draft", "published"] },
+    "version": { "type": "integer", "minimum": 1 },
+    "nodes": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/node" } },
+    "edges": { "type": "array", "maxItems": 2000, "items": { "$ref": "#/$defs/edge" } },
+    "settings": { "$ref": "#/$defs/settings" }
+  },
+  "$defs": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+    },
+    "nodeSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeout_ms": { "type": "integer", "minimum": 100, "maximum": 3600000 },
+        "retry_on_fail": { "type": "boolean" },
+        "max_tries": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "wait_between_ms": { "type": "integer", "minimum": 0, "maximum": 60000 },
+        "on_error": { "enum": ["stop", "continue"] }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "name", "parameters", "position"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+        "type": { "type": "string", "pattern": "^[a-zA-Z0-9_-]{1,100}$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "parameters": { "type": "object" },
+        "position": { "$ref": "#/$defs/position" },
+        "connection_id": { "type": ["string", "null"] },
+        "settings": { "$ref": "#/$defs/nodeSettings" },
+        "pinned_data": {
+          "type": ["array", "null"],
+          "maxItems": 200,
+          "items": { "type": "object", "required": ["json"], "properties": { "json": { "type": "object" } } }
+        },
+        "disabled": { "type": "boolean" }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "output"],
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "output": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "input": { "type": "string", "minLength": 1, "maxLength": 40 }
+      }
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auto_approve": { "enum": ["off", "writes", "all"] },
+        "error_workflow_id": { "type": ["string", "null"] },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
+        "cost_cap_usd": { "type": ["number", "null"], "minimum": 0 }
+      }
+    }
+  }
+}

@@ -14,7 +14,8 @@ from app.core.logging import setup_logging
 from app.core.secrets import SecretStore, build_secret_store
 from app.db.client import Database, SupabaseRestDatabase
 from app.oauth import router as oauth_router
-from app.routers import approvals, chat, connections, health, provider_apps, runs
+from app.routers import approvals, chat, connections, health, provider_apps, runs, workflows
+from app.workflows.service import WorkflowService
 
 
 def create_app(
@@ -46,6 +47,7 @@ def create_app(
             return llm_holder[0]
 
         app.state.runtime = AgentRuntime(app.state.db, app.state.secret_store, app.state.http, settings, llm_factory)
+        app.state.workflows = WorkflowService(app.state.db)
         yield
         if own_http:
             await app.state.http.aclose()
@@ -67,6 +69,7 @@ def create_app(
     app.include_router(approvals.router)
     app.include_router(provider_apps.router)
     app.include_router(runs.router)
+    app.include_router(workflows.router)
     return app
 
 
