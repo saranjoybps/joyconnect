@@ -14,9 +14,13 @@ through one patch API.
 
 ## 2. Working rules (the only ones)
 
-1. **No paid API calls without my explicit approval.** Never call the OpenAI API (or any paid API) to test, debug or
-   verify. Mock the LLM in tests (`FakeLLM` in `apps/api/tests/test_agent.py`). Do not run chat/agent/eval flows that
-   hit OpenAI unless I say "approved". If a real call seems necessary: stop, explain, estimate cost, wait.
+1. **Never use my OpenAI API key (or any paid API) for testing, debugging or verification** unless I send the exact
+   text "yes use the openai key for testing" in the chat.
+   - Without that exact text: mock or stub the LLM in every test (`FakeLLM` in `apps/api/tests/test_agent.py`) and do
+     not run any flow that triggers a real OpenAI call.
+   - If a real call seems necessary: stop, explain why, estimate the cost, and wait for that exact text.
+   - My approval covers only the one task I gave it in. Ask again next time.
+   - Never read or print the key.
 2. **Build connectors and nodes from official docs.** Fetch the docs first and confirm auth flow, scope names,
    endpoints, shapes, limits, errors. For n8n-modeled nodes, read n8n's docs. If docs are unclear or a scope is
    restricted, stop and tell me. Where docs and this file disagree, docs win; note it in `docs/decisions.md`.

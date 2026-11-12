@@ -34,7 +34,11 @@ Revision plan (CLAUDE.md section 5): workflow engine in steps 1-7 below. Progres
   `$("Name")` form are both supported.
 
 ## 5. Rules from the owner (permanent)
-1. Never call the OpenAI API or any paid API for testing without explicit approval ("approved"); mock the LLM.
+1. Never use the owner's OpenAI API key (or any paid API) for testing, debugging or verification unless the owner
+   sends the exact text "yes use the openai key for testing" in the chat. Without it: mock/stub the LLM in every
+   test and run no flow that triggers a real OpenAI call. If a real call seems needed: stop, explain why, estimate
+   the cost, wait for that exact text. Approval covers only the one task it was given in; ask again next time.
+   Never read or print the key.
 2. Build connectors/nodes only from official docs (n8n docs for n8n-modeled nodes); stop and ask if unclear.
 3. Never print or commit secrets.
 
