@@ -86,7 +86,7 @@ MANIFEST = ConnectorManifest(
     auth_type="oauth2",
     authorize_url="https://slack.com/oauth/v2/authorize",
     token_url=f"{API}/oauth.v2.access",
-    scopes=["chat:write", "channels:read", "users:read"],
+    scopes=["chat:write", "channels:read"],
     scope_separator=",",
     token_auth_style="basic",
     pkce=False,
@@ -103,8 +103,10 @@ MANIFEST = ConnectorManifest(
         "Create an app at api.slack.com/apps (From scratch) in your workspace.",
         "OAuth & Permissions > Redirect URLs: add the redirect URI below. Slack requires HTTPS, "
         "so use the tunnel (scripts/dev-tunnel) for local development.",
-        "OAuth & Permissions > Bot Token Scopes: add the scopes listed below.",
+        "OAuth & Permissions > Bot Token Scopes: add the scopes listed below (chat:write, channels:read).",
         "Basic Information > App Credentials: copy the client ID and client secret here.",
+        "After connecting, invite the bot to each channel it should post in (type /invite @YourApp in the "
+        "channel): Slack only lets the bot post where it is a member.",
     ],
     invalid_client_errors=frozenset({"invalid_client_id", "bad_client_secret", "invalid_client"}),
     reauth_errors=frozenset({"invalid_grant", "invalid_refresh_token", "token_revoked", "token_expired"}),

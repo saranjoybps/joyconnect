@@ -183,3 +183,25 @@ public-app OAuth flow, which is not the "easy tier"; decide before building.
 **Granted-scopes check / Partial access badge:** not applicable. These providers expose no way to read a
 token's permissions, so scopes are not tracked (`scopes=[]`) and a lack of permission surfaces as the provider's
 401/403 text. Google connectors keep the full check.
+
+## Slack, Notion, GitHub setup help re-checked against the official docs (2026-11-12)
+
+Docs read: docs.slack.dev (installing-with-oauth, oauth.v2.access, conversations.list, chat.postMessage),
+developers.notion.com (authorization, capabilities), docs.github.com (generating a user access token,
+refreshing user access tokens, registering a GitHub App, permissions required for GitHub Apps).
+
+| Item | Docs say | Change |
+| --- | --- | --- |
+| Slack redirect | `redirect_uri` must use HTTPS | none (already: tunnel) |
+| Slack scopes | `chat:write` for chat.postMessage; conversations.list lists `channels:read` (plus groups/im/mpim for other types) | **Removed `users:read`**: no tool uses it (minimum scopes). Existing connections keep working. |
+| Slack posting | the bot must be a channel member (`not_in_channel`); `chat:write.public` would lift that | Not added (broader scope). Setup help now says `/invite @YourApp` in each channel. |
+| Slack client auth | Basic scheme "strongly" recommended | none (already `token_auth_style=basic`) |
+| Notion | authorize `owner=user`; token with Basic auth, JSON body; refresh supported; send `Notion-Version: 2026-03-11` | none. Capability names (Read, Insert, Update content) confirmed. Localhost rule still unstated. |
+| GitHub flow | PKCE `S256`; user tokens expire in 8 h; refresh token 6 months and **rotates on every refresh** | none (we store the new refresh token; covered by a test) |
+| GitHub permissions | create/list/comment issues need Issues write/read; installation repositories need Metadata read | **Setup help no longer asks for Pull requests and Contents**: no tool uses them. Metadata is automatic. |
+| GitHub callback | docs do not state a localhost or HTTPS rule | unchanged: try localhost, else tunnel |
+
+Not confirmed: the GitHub error code returned for an invalid refresh token (docs do not give one; we treat
+`bad_refresh_token` and `invalid_grant` as needs-reauth, and any 401 from the API also marks Reconnect).
+
+No live end-to-end run was possible: it needs real Slack, Notion and GitHub apps owned by the user.

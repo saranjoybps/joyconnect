@@ -73,7 +73,7 @@ def test_google_authorize_url(client, db):
 
 def test_slack_authorize_url(client):
     _, q = start(client, "slack")
-    assert q["scope"] == "chat:write,channels:read,users:read"
+    assert q["scope"] == "chat:write,channels:read"
     assert "code_challenge" not in q
 
 

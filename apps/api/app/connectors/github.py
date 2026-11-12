@@ -115,7 +115,7 @@ MANIFEST = ConnectorManifest(
     setup_guide=[
         "Create a GitHub App (Settings > Developer settings > GitHub Apps > New GitHub App), not an OAuth App.",
         "Callback URL: the redirect URI below. Tick 'Expire user authorization tokens'. Webhook: off.",
-        "Repository permissions: Issues read & write; Pull requests, Contents and Metadata read-only.",
+        "Repository permissions: Issues read & write (Metadata read-only is added automatically). No other permission is needed.",
         "Copy the client ID, generate a client secret, and paste both here with the app slug.",
         "After connecting, install the app on the repositories you want to use.",
     ],

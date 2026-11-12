@@ -47,7 +47,7 @@ def test_manifests_use_minimum_scopes():
     assert m["google_sheets"].scopes == ["openid", "email", "https://www.googleapis.com/auth/spreadsheets"]
     assert m["google_docs"].scopes[-1] == "https://www.googleapis.com/auth/documents"
     assert "https://www.googleapis.com/auth/calendar.events" in m["google_calendar"].scopes
-    assert m["slack"].scopes == ["chat:write", "channels:read", "users:read"]
+    assert m["slack"].scopes == ["chat:write", "channels:read"]
     for g in ("google_sheets", "google_docs", "google_calendar"):
         assert not any("drive" in s or "gmail" in s for s in m[g].scopes)
 

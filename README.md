@@ -170,7 +170,8 @@ card shows "Partial access".
 1. https://api.slack.com/apps → Create New App → From scratch → pick your workspace.
 2. OAuth & Permissions → Redirect URLs: `{PUBLIC_API_BASE_URL}/api/oauth/callback/slack`. Slack requires
    HTTPS, so for local use start the tunnel (`scripts/dev-tunnel.sh`) and register the HTTPS URI it prints.
-3. Bot Token Scopes: `chat:write`, `channels:read`, `users:read`. Leave token rotation off.
+3. Bot Token Scopes: `chat:write`, `channels:read`. Leave token rotation off.
+   After connecting, `/invite @YourApp` in each channel the bot should post in (it must be a member).
 4. Basic Information → App Credentials → paste Client ID and Client Secret into Slack's Set up.
 
 ### Notion
@@ -182,7 +183,7 @@ card shows "Partial access".
 1. GitHub → Settings → Developer settings → GitHub Apps → New GitHub App.
 2. Callback URL: `http://localhost:8000/api/oauth/callback/github` (use the tunnel URI if GitHub rejects localhost). Tick **Expire user authorization
    tokens**; leave "Request user authorization during installation" off; Webhook inactive.
-3. Repository permissions: Issues **Read & write**; Pull requests, Contents, Metadata **Read**.
+3. Repository permissions: Issues **Read & write** (Metadata read-only is automatic). Nothing else is needed.
 4. Generate a client secret. In GitHub's Set up paste the **Client ID** (starts with `Iv`, not the App ID),
    the secret, and the app slug (from `github.com/apps/<slug>`).
 5. After connecting, use **Choose repositories** on the card to install the app on repos.
