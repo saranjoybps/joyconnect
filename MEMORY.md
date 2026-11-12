@@ -106,15 +106,21 @@ Docs: CLAUDE.md (design + rules), docs/decisions.md, README.md (setup, provider 
 - New `/settings` page; every module (shell, chat, Connections, Workflows list/canvas, Runs, Memory, Settings, Login) uses the glass style.
 - Tests: API 621+ passed; web 168 passed; `next build` passes.
 
-## Design direction v3 (2026-11-12, IN REVIEW: preview built, waiting for owner approval)
-- The owner found the glassmorphism UI "childish". New direction: premium, restrained, calm, technical (Linear / Vercel /
-  Raycast / Perplexity / Claude). Dark primary (#0A0A0F base, layered surfaces, 1px hairlines at 6-10% white), light =
-  warm off-white. ONE indigo-violet accent, desaturated status colours, no big gradients/rainbow. Radii 8-12px, 32-36px
-  buttons, 13-14px text, Geist + Geist Mono, Lucide icons (16-18px). Glass ONLY on floating layers (modal, popover,
-  command palette, composer), with a solid fallback. Motion 120-200ms, honour prefers-reduced-motion.
-- AI-native: streaming cursor, thinking shimmer, agent activity timeline, tool/source chips, status bar (mode, model,
-  memory), Cmd/Ctrl+K palette, shortcut hints. Canvas: dotted grid, slim nodes with logo tile, animated flow while running.
-- Tokens are namespaced `--p-*` / `p-*` Tailwind colours in `globals.css`; components live in `apps/web/components/pro/`.
-  Preview route `/design` (dev only, 404 in production). `npm run contrast` also runs `scripts/contrast-pro.mjs`.
-- NOT yet applied to the app: the glass UI of the previous section is still what the modules use. After approval: migrate
-  every module to `components/pro/*`, drop the old glass tokens/aurora, keep behaviour and tests unchanged.
+## Design direction v4 (2026-11-12, IN REVIEW: preview built, waiting for owner approval)
+- The owner rejected the glassmorphism/glow and the "premium dark" directions. New direction: MINIMAL, modelled on a
+  reference image of a minimal AI chat product (own logo/name/illustrations, not copied): a large rounded window (24px)
+  floating on a soft gradient page (light: peach to lavender; dark: charcoal to indigo); window surface off-white / near-black.
+- Layout: slim left sidebar (Home, Connections, Workflows, Runs, Memory, Settings; an "AI tools" group listing Modes;
+  user card with name, email and a Light/Dark/System toggle at the bottom). NO conversations in the sidebar. Chat history is
+  a separate collapsible RIGHT panel (search, title + one-line preview + time, rename/delete menu, "Create new chat" at the
+  bottom; hidden by default on small screens, toggled by a history icon). Chat home: abstract glyph, "Welcome, <first name>",
+  "How can I help you today?", three suggestion cards that fill the composer. Composer pinned at the bottom with Attach,
+  Mode (opens the slash list), Options (model, memory), mic, round ink send; "/" opens the command menu.
+- Style: hairline borders, soft shadows, 12-16px card radii, pill buttons/chips, primary = solid near-black pill (white in
+  dark), neutral palette, one soft accent used sparingly, desaturated status shown as dot + text (no filled badges),
+  Geist + Geist Mono, Lucide icons, 150ms transitions, reduced motion honoured. No glass, no glow, no gradients on UI.
+- Tokens are `--m-*` / `m-*` Tailwind colours in `globals.css`; components in `apps/web/components/min/`; dev-only preview
+  at `/design` (404 in production). `npm run contrast` runs `scripts/contrast-min.mjs` (WCAG AA, both themes).
+- NOT yet applied to the app modules (they still use the older glass UI). After approval: migrate shell, chat, connections
+  (modal setup, Connected first), workflows (light dotted-grid canvas, slim nodes), runs, memory, settings; remove the old
+  glass tokens/aurora and `components/ui` glass; keep behaviour and tests passing.

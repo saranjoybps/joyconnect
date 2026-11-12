@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "next typegen && tsc --noEmit",
-    "contrast": "node scripts/contrast.mjs && node scripts/contrast-pro.mjs"
+    "contrast": "node scripts/contrast-min.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
