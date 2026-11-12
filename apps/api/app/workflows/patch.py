@@ -45,6 +45,7 @@ class NewNode(BaseModel):
     position: Position | None = None
     connection_id: str | None = None
     settings: dict[str, Any] | None = None
+    pinned_data: list[dict[str, Any]] | None = None
     disabled: bool | None = None
 
 
@@ -180,6 +181,8 @@ def apply_operations(doc: Doc, operations: list[Any], registry: NodeRegistry | N
                 node["connection_id"] = n.connection_id
             if n.settings:
                 node["settings"] = n.settings
+            if n.pinned_data:
+                node["pinned_data"] = n.pinned_data
             if n.disabled is not None:
                 node["disabled"] = n.disabled
             out["nodes"].append(node)

@@ -205,3 +205,25 @@ Not confirmed: the GitHub error code returned for an invalid refresh token (docs
 `bad_refresh_token` and `invalid_grant` as needs-reauth, and any 401 from the API also marks Reconnect).
 
 No live end-to-end run was possible: it needs real Slack, Notion and GitHub apps owned by the user.
+
+## Workflow engine (steps 1-3 of the architecture revision)
+
+n8n docs read first (docs.n8n.io: data structure, expressions, If, Switch, Merge, Loop Over Items, Wait, Filter,
+Stop and Error, Execute Sub-workflow, Error Trigger, Webhook, Schedule Trigger, Edit Fields, Aggregate, Split Out,
+Sort, Limit, HTTP Request, Respond to Webhook). Where we differ, and why:
+
+| Item | n8n docs say | Ours |
+| --- | --- | --- |
+| Expressions | documented form is `$('Node Name').item.json.x`; `$node["Name"].json` is not on the reference page | **both** work (the requested `$node["Name"].json.field` and `$("Name")`) |
+| Expression language | JavaScript | our own tokenizer/parser over a JS-like subset with whitelisted methods; no `eval`, no attribute access on Python objects, size/depth/step limits |
+| Sort `Code` type, Code nodes | run JavaScript | not offered: no arbitrary code execution |
+| Binary data | `binary` key on items | not supported (JSON items only) |
+| Sub-workflow source | database, file, parameter, URL | database (your own workflows) only |
+| Sub-workflow approvals | n/a | a write step inside a sub-workflow cannot ask for approval; it fails with an explanation unless the workflow has auto-approve |
+| Wait on webhook / form | supported | not yet (interval and fixed time only) |
+| Retries | per-node setting | read-risk nodes only. Write and destructive nodes never retry (a retry could duplicate the action), even if retry_on_fail is set |
+| Auto-approve | n/a | `off / writes / all`. Destructive nodes pause unless `all`: "destructive always asks" stays the default |
+| HTTP Request | any URL | SSRF guard: loopback, private, link-local (cloud metadata) and reserved addresses are refused unless `ALLOW_PRIVATE_HTTP_HOSTS`; redirects are not followed; non-GET/HEAD/OPTIONS counts as a write |
+| Error workflow | a workflow with an Error Trigger is its own error workflow by default | must be named explicitly in `settings.error_workflow_id`; runs for schedule/webhook failures only, never manual or test runs; the handler does not need to be published |
+| Loop Over Items | "reset" option | not implemented; if the loop body returns no items the loop continues instead of stalling |
+| Filter | no discarded output | same (one output) |

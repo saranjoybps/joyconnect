@@ -59,6 +59,17 @@ class Settings(BaseSettings):
 
     allow_private_db_hosts: bool = False
 
+    # Workflow engine
+    allow_private_http_hosts: bool = False           # HTTP Request node SSRF guard (private/loopback/metadata)
+    node_timeout_seconds: int = 60
+    workflow_timeout_seconds: int = 600
+    workflow_max_node_runs: int = 2000               # stops endless loops
+    max_subworkflow_depth: int = 5
+    default_run_cost_cap_usd: float = 1.0            # per run, AI nodes; 0 = no default cap
+    worker_poll_seconds: float = 1.0
+    worker_lease_seconds: int = 300
+    scheduler_tick_seconds: float = 5.0
+
     def platform_value(self, app_provider: str, field_key: str) -> str:
         name = f"PLATFORM_{app_provider}_{field_key}".upper()
         if name in self.platform_defaults:

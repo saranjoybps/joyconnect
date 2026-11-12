@@ -162,4 +162,24 @@ class MemoryDatabase:
         ]
 
     async def rpc(self, fn: str, args: Row) -> Any:
+        if fn == "claim_next_execution" and fn not in self.rpcs:
+            return self._claim_next_execution(**args)
         return self.rpcs[fn](**args)
+
+    def _claim_next_execution(self, p_worker: str, p_lease_seconds: int = 300) -> list[Row]:
+        """Same rules as the SQL function in migration 0007 (single-threaded, so no SKIP LOCKED needed)."""
+        now = datetime.now(timezone.utc)
+
+        def ts(v: Any) -> datetime:
+            return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+
+        for r in self._rows("executions"):
+            due = (r["status"] == "queued"
+                   or (r["status"] == "waiting" and r.get("resume_at") and ts(r["resume_at"]) <= now)
+                   or (r["status"] == "running" and r.get("locked_at")
+                       and (now - ts(r["locked_at"])).total_seconds() > p_lease_seconds))
+            if due:
+                r.update(status="running", locked_by=p_worker, locked_at=now.isoformat(), resume_at=None,
+                         started_at=r.get("started_at") or now.isoformat())
+                return [copy.deepcopy(r)]
+        return []
