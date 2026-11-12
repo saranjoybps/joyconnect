@@ -22,3 +22,5 @@ coverage/
 api.log
 web.log
 *.egg-info/
+.worker.log
+.worker.err.log
