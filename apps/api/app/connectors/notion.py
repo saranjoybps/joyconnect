@@ -77,6 +77,7 @@ def _prop_value(prop: dict) -> Any:
 
 
 async def search(ctx: ToolContext, query: str) -> dict:
+    """Pages and databases whose title matches (an empty query lists the most recent)."""
     resp = await ctx.http.post(f"{API}/search", json={"query": query, "page_size": 20},
                                headers=_headers(ctx, ctx.settings))
     raise_for_status(resp, "Notion search")
@@ -177,7 +178,7 @@ MANIFEST = ConnectorManifest(
     tools=[
         ToolDef(
             name="notion__search",
-            description="Search Notion pages and databases shared with the integration by title.",
+            description="Find Notion pages and databases shared with the integration by title (an empty query lists recent ones). Use first to get a page or database id; never ask the user for one.",
             parameters=object_schema({"query": {"type": "string"}}),
             risk="read", handler=search,
         ),

@@ -13,11 +13,19 @@ _PATTERNS = [
     re.compile(r"\b(ntn_|secret_)[A-Za-z0-9]+"),
     re.compile(r"(postgres(?:ql)?://[^:/\s]+:)[^@\s]+"),
 ]
+# Personal data: never written to logs either.
+_PII = [
+    (re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"), "[EMAIL]"),
+    (re.compile(r"\b(?:\d[ -]?){13,19}\b"), "[CARD]"),
+    (re.compile(r"(?<![\w.])\+?\d{1,3}[ .-]?\(?\d{2,4}\)?[ .-]?\d{3,4}[ .-]?\d{3,4}\b"), "[PHONE]"),
+]
 
 
 def redact(text: str) -> str:
     for pattern in _PATTERNS:
         text = pattern.sub(r"\1[REDACTED]", text)
+    for pattern, label in _PII:
+        text = pattern.sub(label, text)
     return text
 
 

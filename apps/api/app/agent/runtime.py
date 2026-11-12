@@ -5,6 +5,7 @@ Events yielded (sent as SSE): token, tool_call, approval_required, tool_result, 
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -13,13 +14,16 @@ from typing import Any, AsyncIterator, Callable
 import httpx
 
 from app.agent.llm import LLM, LLMError, LLMResult
+from app.agent.guards import StreamGuard, check_final, looks_injected, validate_arguments, wrap_untrusted
+from app.agent.memory import Embedder, MemoryService, Summarizer
 from app.agent.modes import CONNECTOR, Mode, allowed, describe, resolve, split_command
 from app.agent.policy import build_preview, decide, redact_args, redact_result, scrub, tool_label
 from app.agent.prompts import system_prompt
-from app.agent.response import build_action
+from app.agent.response import Action, build_action
+from app.agent.usage import RunBudget, UsageLog, usage_of
 from app.agent.tools import (
     MAX_RESULT_CHARS, BoundTool, ToolExecutor, available_tools, log_scope_mismatch, pick_connection,
-    to_openai_tool, validate_args,
+    to_openai_tool,
 )
 from app.connectors.registry import get_manifest
 from app.core.config import Settings
@@ -30,6 +34,8 @@ log = logging.getLogger(__name__)
 Event = dict[str, Any]
 HISTORY_LIMIT = 40
 DECLINED = {"error": "The user declined this action."}
+STOPPED_NOTE = ("I did not do that: you rejected it, so nothing was changed. I stopped here. "
+                "Tell me what you would like instead and I will start again.")
 MODE_REFUSAL = ("This tool is not available in the current chat mode. "
                 "Tell the user to switch mode (typing / lists them).")
 INTERRUPTED = {"error": "This action did not complete (it was interrupted). Nothing was confirmed."}
@@ -101,10 +107,14 @@ def _repair_tool_exchanges(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 class AgentRuntime:
     def __init__(self, db: Database, store: SecretStore, http: httpx.AsyncClient, settings: Settings,
-                 llm_factory: Callable[[], LLM]):
+                 llm_factory: Callable[[], LLM], embedder_factory: Callable[[], Embedder] | None = None):
         self.db, self.settings = db, settings
         self.executor = ToolExecutor(db, store, http, settings)
         self._llm_factory = llm_factory
+        self.usage = UsageLog(db, settings)
+        self.memory = MemoryService(db, embedder_factory, llm_factory, settings)
+        self.summarizer = Summarizer(db, llm_factory, settings)
+        self._background: set[asyncio.Task[Any]] = set()
 
     # ------------------------------------------------------------------ public entry points
 
@@ -157,8 +167,13 @@ class AgentRuntime:
         if limit and await self._used_today("messages", user_id, {"role": "user"}, limit) >= limit:
             raise AgentError(429, f"You have reached the daily limit of {limit} chat messages. "
                                   "It resets at midnight UTC.")
+        tokens = self.settings.daily_token_limit
+        if tokens and await self.usage.tokens_today(user_id) >= tokens:
+            raise AgentError(429, f"You have reached today's usage limit (about {tokens:,} tokens). "
+                                  "It resets at midnight UTC.")
         await self._save_message(user_id, conversation_id, "user", content=text)
-        async for ev in self._loop(user_id, conversation_id, text):
+        memories = await self.memory.retrieve(user_id, text)
+        async for ev in self._loop(user_id, conversation_id, text, memories):
             yield ev
 
     async def decide_approval(self, user_id: str, approval_id: str, approve: bool) -> AsyncIterator[Event]:
@@ -187,10 +202,24 @@ class AgentRuntime:
             raise AgentError(409, "approval already decided")
 
         tool_call_id = preview["tool_call_id"]
+        actions: list[Action] = []
         if not approve:
+            # Reject ends the task: nothing else from this plan runs, the model is not asked to continue.
             await self._finish_call(user_id, conversation_id, approval["tool_run_id"], tool_call_id,
                                     False, DECLINED, "rejected")
             yield _result_ev(tool_call_id, preview["tool"], False, DECLINED, "Declined by you")
+            now = datetime.now(timezone.utc).isoformat()
+            for other in await self._pending_approvals(user_id, conversation_id):
+                if not await self.db.update("approvals", {"id": other["id"], "status": "pending"},
+                                            {"status": "rejected", "decided_at": now}):
+                    continue
+                await self._finish_call(user_id, conversation_id, other["tool_run_id"],
+                                        other["preview"]["tool_call_id"], False, DECLINED, "rejected")
+                yield _result_ev(other["preview"]["tool_call_id"], other["preview"]["tool"], False, DECLINED,
+                                 "Declined by you")
+            async for ev in self._stop(user_id, conversation_id, STOPPED_NOTE):
+                yield ev
+            return
         else:
             await self.db.update("tool_runs", {"id": approval["tool_run_id"]}, {"status": "approved"})
             bound = await self._bind(user_id, preview["tool"])
@@ -205,13 +234,22 @@ class AgentRuntime:
                 ok, result, ms = await self.executor.execute_timed(bound, args)
             await self._finish_call(user_id, conversation_id, approval["tool_run_id"], tool_call_id, ok, result,
                                     "ok" if ok else "error", ms)
-            yield _result_ev(tool_call_id, preview["tool"], ok, result)
+            ev = _result_ev(tool_call_id, preview["tool"], ok, result)
+            if ev["data"].get("action"):
+                actions.append(Action(**ev["data"]["action"]))
+            yield ev
 
         if await self._pending_approvals(user_id, conversation_id):
             yield _ev("done", conversation_id=conversation_id)
             return
-        async for ev in self._loop(user_id, conversation_id, ""):
+        # The run resumes exactly where it stopped. Its step/token/cost caps start fresh for the continuation.
+        async for ev in self._loop(user_id, conversation_id, "", actions=actions):
             yield ev
+
+    async def _stop(self, user_id: str, conversation_id: str, note: str) -> AsyncIterator[Event]:
+        await self._save_message(user_id, conversation_id, "assistant", content=note)
+        yield _ev("token", text=note)
+        yield _ev("done", conversation_id=conversation_id)
 
     async def _used_today(self, table: str, user_id: str, extra: dict[str, Any], cap: int) -> int:
         now = datetime.now(timezone.utc)
@@ -226,7 +264,8 @@ class AgentRuntime:
 
     # ------------------------------------------------------------------ loop
 
-    async def _loop(self, user_id: str, conversation_id: str, latest_text: str) -> AsyncIterator[Event]:
+    async def _loop(self, user_id: str, conversation_id: str, latest_text: str, memories: list[str] | None = None,
+                    actions: list[Action] | None = None) -> AsyncIterator[Event]:
         try:
             llm = self._llm_factory()
         except LLMError as exc:
@@ -234,34 +273,75 @@ class AgentRuntime:
             yield _ev("done", conversation_id=conversation_id)
             return
 
+        budget = RunBudget(self.settings)
+        actions = list(actions or [])
         for _step in range(self.settings.max_tool_steps):
+            capped = budget.exceeded()
+            if capped:
+                async for ev in self._stop(user_id, conversation_id, capped + " Tell me how you would like to continue."):
+                    yield ev
+                return
             mode = await self._mode(user_id, conversation_id)
             tools = await available_tools(self.db, user_id, latest_text, self.settings.max_tools_per_request, mode)
-            messages = await self._history(conversation_id, tools, mode)
+            messages = await self._history(conversation_id, tools, mode, user_id, memories)
             result: LLMResult | None = None
+            guard, streamed = StreamGuard(), ""
             try:
                 async for part in llm.stream(messages, [to_openai_tool(b.tool) for b in tools.values()]):
                     if isinstance(part, LLMResult):
                         result = part
                     else:
-                        yield _ev("token", text=part)
+                        out = guard.feed(part)
+                        if out:
+                            streamed += out
+                            yield _ev("token", text=out)
             except LLMError as exc:
                 log.warning("LLM call failed: %s", exc)
                 yield _ev("error", message="The assistant is unavailable right now. Please try again.")
                 yield _ev("done", conversation_id=conversation_id)
                 return
             assert result is not None
+            used = usage_of(result.usage, messages, result.content, result.tool_calls)
+            budget.add(used)
+            await self.usage.record(user_id, conversation_id, "chat", used)
+
+            if not result.tool_calls:
+                # Final answer: check it against the response contract before it is stored or finished streaming.
+                final, fixes = check_final(result.content, actions)
+                if fixes:
+                    log.info("final answer corrected: %s", ",".join(fixes))
+                tail = final[len(streamed):] if final.startswith(streamed) else final
+                if tail:
+                    yield _ev("token", text=tail)
+                await self._save_message(user_id, conversation_id, "assistant", content=final or None)
+                yield _ev("done", conversation_id=conversation_id)
+                async for _ in self._after_answer(user_id, conversation_id):
+                    pass
+                return
 
             await self._save_message(user_id, conversation_id, "assistant", content=result.content or None,
-                                     tool_calls=result.tool_calls or None)
-            if not result.tool_calls:
-                yield _ev("done", conversation_id=conversation_id)
-                return
+                                     tool_calls=result.tool_calls)
+
+            # Independent read-only calls run side by side; everything else runs one at a time, in order.
+            early: dict[str, list[Event]] = {}
+            reads = [c for c in result.tool_calls if self._parallel_read(c, tools, mode)]
+            if self.settings.llm_parallel_tool_calls and len(reads) > 1:
+                sem = asyncio.Semaphore(max(1, self.settings.max_parallel_reads))
+
+                async def run_one(call: dict[str, Any]) -> tuple[str, list[Event]]:
+                    async with sem:
+                        return call["id"], [e async for e in self._handle_call(user_id, conversation_id, call, tools, mode)]
+
+                early = dict(await asyncio.gather(*(run_one(c) for c in reads)))
 
             paused = False
             for call in result.tool_calls:
-                async for ev in self._handle_call(user_id, conversation_id, call, tools, mode):
+                stream = _replay(early[call["id"]]) if call["id"] in early else \
+                    self._handle_call(user_id, conversation_id, call, tools, mode)
+                async for ev in stream:
                     paused = paused or ev["event"] == "approval_required"
+                    if ev["event"] == "tool_result" and ev["data"].get("action"):
+                        actions.append(Action(**ev["data"]["action"]))
                     yield ev
             if paused:
                 yield _ev("done", conversation_id=conversation_id)
@@ -271,6 +351,32 @@ class AgentRuntime:
         await self._save_message(user_id, conversation_id, "assistant", content=note)
         yield _ev("token", text=note)
         yield _ev("done", conversation_id=conversation_id)
+
+    @staticmethod
+    def _parallel_read(call: dict[str, Any], tools: dict[str, BoundTool], mode: Mode) -> bool:
+        name = call["function"]["name"]
+        bound = tools.get(name)
+        return bool(bound and allowed(mode, name) and bound.tool.risk == "read" and not bound.missing)
+
+    async def _after_answer(self, user_id: str, conversation_id: str) -> AsyncIterator[Event]:
+        """Long-term memory extraction. In the background by default so the reply is never delayed."""
+        if not self.settings.memory_extraction:
+            return
+        if self.settings.memory_background:
+            task = asyncio.create_task(self.memory.extract(user_id, conversation_id))
+            self._background.add(task)
+            task.add_done_callback(self._background.discard)
+        else:
+            await self.memory.extract(user_id, conversation_id)
+        return
+        yield  # pragma: no cover  (makes this an async generator)
+
+    async def _tainted(self, conversation_id: str) -> bool:
+        """Has any tool result since the user's last message tried to give instructions? Then this run loses
+        auto-approve: every write asks, so injected text can never change anything on its own."""
+        rows = await self.db.select("messages", {"conversation_id": conversation_id}, order="seq.asc")
+        last_user = max((i for i, r in enumerate(rows) if r["role"] == "user"), default=-1)
+        return any(r["role"] == "tool" and looks_injected(r.get("content")) for r in rows[last_user + 1:])
 
     def _tool_call_event(self, call_id: str, bound: BoundTool) -> Event:
         return _ev("tool_call", id=call_id, tool=bound.tool.name, connector=bound.manifest.id,
@@ -319,7 +425,7 @@ class AgentRuntime:
         elif args is None:
             problem = "Tool arguments were not valid JSON."
         else:
-            problem = validate_args(bound.tool, args)
+            problem = validate_arguments(bound.tool.parameters, args)
         if problem:
             await self._save_message(user_id, conversation_id, "tool", content=_result_text({"error": problem}),
                                      tool_call_id=call_id)
@@ -350,7 +456,8 @@ class AgentRuntime:
             yield _result_ev(call_id, name, ok, result)
             return
 
-        if decide(bound.tool.risk, bound.auto_approve) == "ask":
+        auto = bound.auto_approve and not await self._tainted(conversation_id)
+        if decide(bound.tool.risk, auto) == "ask":
             preview = build_preview(bound.manifest, bound.tool, args, tool_call_id=call_id,
                                     conversation_id=conversation_id,
                                     account_label=bound.connection.get("account_label"))
@@ -415,14 +522,22 @@ class AgentRuntime:
         rows = await self.db.select("conversations", {"id": conversation_id, "user_id": user_id})
         return Mode.from_row(rows[0] if rows else None)
 
-    async def _history(self, conversation_id: str, tools: dict[str, BoundTool],
-                       mode: Mode | None = None) -> list[dict[str, Any]]:
+    async def _history(self, conversation_id: str, tools: dict[str, BoundTool], mode: Mode | None = None,
+                       user_id: str | None = None, memories: list[str] | None = None) -> list[dict[str, Any]]:
         rows = await self.db.select("messages", {"conversation_id": conversation_id}, order="seq.asc")
-        rows = rows[-HISTORY_LIMIT:]
+        summary: str | None = None
+        if user_id and self.settings.conversation_summary:
+            conv = (await self.db.select("conversations", {"id": conversation_id, "user_id": user_id}) or [None])[0]
+            if conv:
+                state = await self.summarizer.maybe_summarize(user_id, conv, rows)
+                summary = state.get("summary")
+                rows = [r for r in rows if int(r.get("seq") or 0) > int(state.get("summary_upto") or 0)]
+        rows = rows[-self.settings.history_window:]
         while rows and rows[0]["role"] != "user":  # never start mid tool-exchange
             rows = rows[1:]
         names = sorted({b.manifest.name for b in tools.values()})
-        out: list[dict[str, Any]] = [{"role": "system", "content": system_prompt(names, describe(mode) if mode else "")}]
+        out: list[dict[str, Any]] = [{"role": "system", "content": system_prompt(
+            names, describe(mode) if mode else "", memories, summary)}]
         rows = _repair_tool_exchanges(rows)
         for r in rows:
             if r["role"] == "assistant":
@@ -431,7 +546,14 @@ class AgentRuntime:
                     msg["tool_calls"] = r["tool_calls"]
                 out.append(msg)
             elif r["role"] == "tool":
-                out.append({"role": "tool", "tool_call_id": r["tool_call_id"], "content": r.get("content") or ""})
+                # Tool output is third-party data: the model always sees it wrapped as untrusted.
+                out.append({"role": "tool", "tool_call_id": r["tool_call_id"],
+                            "content": wrap_untrusted(r.get("content"))})
             elif r["role"] == "user":
                 out.append({"role": "user", "content": r.get("content") or ""})
         return out
+
+
+async def _replay(events: list[Event]) -> AsyncIterator[Event]:
+    for ev in events:
+        yield ev

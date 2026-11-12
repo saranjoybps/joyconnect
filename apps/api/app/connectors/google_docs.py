@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from app.connectors._google import google_manifest, parse_google_file_id
+from app.connectors._google import (DRIVE_METADATA, DRIVE_METADATA_LABEL, MIME_DOC, google_manifest,
+                                    parse_google_file_id, search_tool)
 from app.connectors.base import ToolContext, ToolDef, ToolError, object_schema, raise_for_status
 
 API = "https://docs.googleapis.com/v1/documents"
 MAX_CHARS = 20_000
 
-DOCUMENT_ID = {"type": "string", "description": "Document ID or full Google Docs URL pasted by the user."}
+DOCUMENT_ID = {"type": "string", "description": "Document ID (from google_docs__search_documents) or a Google Docs URL the user already gave."}
 
 
 def _did(value: str) -> str:
@@ -85,10 +86,13 @@ async def insert_table(ctx: ToolContext, document_id: str, rows: int, columns: i
 MANIFEST = google_manifest(
     id="google_docs",
     name="Google Docs",
-    description="Create documents and read or append to docs you share by link or ID.",
-    scopes=["https://www.googleapis.com/auth/documents"],
+    description="Find your documents by name, read them, create new ones and append or replace text.",
+    scopes=["https://www.googleapis.com/auth/documents", DRIVE_METADATA],
+    core_scopes=["https://www.googleapis.com/auth/documents"],
+    scope_labels={DRIVE_METADATA: DRIVE_METADATA_LABEL},
     api_to_enable="Google Docs API",
     tools=[
+        search_tool("google_docs__search_documents", "Google Docs documents", MIME_DOC),
         ToolDef(
             name="google_docs__create_document",
             description="Create a new Google Doc with a title and optional starting text.",

@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/connections", label: "Connections" },
   { href: "/workflows", label: "Workflows" },
   { href: "/runs", label: "Runs" },
+  { href: "/memory", label: "Memory" },
 ];
 
 export function AppNav() {

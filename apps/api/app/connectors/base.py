@@ -71,24 +71,24 @@ def provider_error(what: str, status: int, detail: str = "", retry_after: float 
     extra = f" Provider said: {detail}" if detail else ""
     if kind == "auth":
         msg = (f"{what} failed ({status}): the provider rejected the credentials. "
-               f"Reconnect this app on the Connections page.{extra}")
+               f"Reconnect this app on the Connections page.{extra} Next step: reconnect, then ask again.")
     elif kind == "scope":
         msg = (f"{what} failed ({status}): the connection is missing a permission this needs. "
-               f"Reconnect the app and grant every permission.{extra}")
+               f"Reconnect the app and grant every permission.{extra} Next step: reconnect and tick every permission.")
     elif kind == "permission":
         msg = (f"{what} failed ({status}): the connected account is not allowed to do this "
-               f"(check sharing or role).{extra}")
+               f"(check sharing or role).{extra} Next step: share it with the connected account or pick another one.")
     elif kind == "not_found":
-        msg = f"{what} failed ({status}): not found. Check the id or name, and that it is shared with the app.{extra}"
+        msg = f"{what} failed ({status}): not found. Check the id or name, and that it is shared with the app.{extra} Next step: search by name instead of guessing an id."
     elif kind == "rate_limit":
         wait = f" in {int(retry_after)} seconds" if retry_after else " in a minute"
-        msg = f"{what} was rate limited by the provider (429). Try again{wait}."
+        msg = f"{what} was rate limited by the provider (429). Try again{wait}. Next step: wait, then retry."
     elif kind == "server":
-        msg = f"{what} failed ({status}): the provider is having trouble right now. Try again shortly.{extra}"
+        msg = f"{what} failed ({status}): the provider is having trouble right now. Try again shortly.{extra} Next step: retry in a minute."
     elif kind == "invalid":
-        msg = f"{what} failed ({status}): the provider did not accept the request.{extra}"
+        msg = f"{what} failed ({status}): the provider did not accept the request.{extra} Next step: check the values and try again."
     else:
-        msg = f"{what} failed ({status}).{extra}"
+        msg = f"{what} failed ({status}).{extra} Next step: try again, or tell me what you see."
     return ProviderError(msg, kind, status, retry_after)
 
 

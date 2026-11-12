@@ -46,6 +46,16 @@ async def list_bases(ctx: ToolContext) -> dict:
                       for b in resp.json().get("bases", [])]}
 
 
+async def list_tables(ctx: ToolContext, base_id: str) -> dict:
+    resp = await ctx.http.get(f"{API}/meta/bases/{_base(base_id)}/tables", headers=ctx.bearer)
+    raise_for_status(resp, "Listing tables")
+    return {"tables": [
+        {"id": t.get("id"), "name": t.get("name"), "primary_field": t.get("primaryFieldId"),
+         "fields": [{"name": f.get("name"), "type": f.get("type")} for f in t.get("fields", [])][:40],
+         "views": [v.get("name") for v in t.get("views", [])][:10]}
+        for t in resp.json().get("tables", [])]}
+
+
 async def list_records(ctx: ToolContext, base_id: str, table: str, max_records: int,
                        filter_formula: str | None) -> dict:
     params: dict = {"maxRecords": max(1, min(max_records, 100))}
@@ -74,7 +84,7 @@ async def create_record(ctx: ToolContext, base_id: str, table: str, fields_json:
 
 MANIFEST = api_key_manifest(
     id="airtable", name="Airtable",
-    description="List bases, read records and add records to Airtable tables.",
+    description="Find your bases and tables, read records and add records.",
     credential_fields=[CredentialField(
         key="api_key", label="Personal access token", secret=True, pattern=r"pat[A-Za-z0-9]{14}\.[a-f0-9]{64}",
         pattern_hint="Starts with 'pat', then a dot and a long hex string.",
@@ -86,8 +96,13 @@ MANIFEST = api_key_manifest(
                  "Under Access, choose the bases this app may use, create the token and paste it here."],
     health_tool="airtable__list_bases",
     tools=[
-        ToolDef(name="airtable__list_bases", description="List the Airtable bases the token can access.",
+        ToolDef(name="airtable__list_bases", description="List the Airtable bases the token can access (names and ids). "
+                                                  "Use first; never ask the user for a base id.",
                 parameters=object_schema({}), risk="read", handler=list_bases),
+        ToolDef(name="airtable__list_tables",
+                description="List the tables of a base with their field names and types. Use after list_bases to "
+                            "find the exact table name before reading or adding records.",
+                parameters=object_schema({"base_id": BASE_ID}), risk="read", handler=list_tables),
         ToolDef(name="airtable__list_records",
                 description="List records in a table (up to 100). Optionally filter with an Airtable formula.",
                 parameters=object_schema({

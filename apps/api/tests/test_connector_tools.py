@@ -44,12 +44,13 @@ def test_expected_risk_levels():
 
 def test_manifests_use_minimum_scopes():
     m = all_manifests()
-    assert m["google_sheets"].scopes == ["openid", "email", "https://www.googleapis.com/auth/spreadsheets"]
-    assert m["google_docs"].scopes[-1] == "https://www.googleapis.com/auth/documents"
+    assert m["google_sheets"].scopes == ["openid", "email", "https://www.googleapis.com/auth/spreadsheets",
+                                         "https://www.googleapis.com/auth/drive.metadata.readonly"]
+    assert "https://www.googleapis.com/auth/documents" in m["google_docs"].scopes
     assert "https://www.googleapis.com/auth/calendar.events" in m["google_calendar"].scopes
-    assert m["slack"].scopes == ["chat:write", "channels:read"]
+    assert m["slack"].scopes == ["chat:write", "channels:read", "users:read"]
     for g in ("google_sheets", "google_docs", "google_calendar"):
-        assert not any("drive" in s or "gmail" in s for s in m[g].scopes)
+        assert not any(("drive" in s and not s.endswith("drive.metadata.readonly")) or "gmail" in s for s in m[g].scopes)
 
 
 @pytest.mark.parametrize("value,expected", [

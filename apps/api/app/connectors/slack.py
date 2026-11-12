@@ -73,6 +73,15 @@ async def list_channels(ctx: ToolContext) -> dict:
     ]}
 
 
+async def list_users(ctx: ToolContext) -> dict:
+    """Workspace members (users.list needs users:read). Deactivated users and bots are left out."""
+    data = await _call(ctx, "users.list", data={"limit": "200"})
+    return {"users": [
+        {"id": u["id"], "name": u.get("name"), "real_name": u.get("real_name"),
+         "display_name": (u.get("profile") or {}).get("display_name")}
+        for u in data.get("members", []) if not u.get("deleted") and not u.get("is_bot")]}
+
+
 async def post_message(ctx: ToolContext, channel: str, text: str) -> dict:
     data = await _call(ctx, "chat.postMessage", json={"channel": channel.lstrip("#"), "text": text})
     return {"channel": data.get("channel"), "ts": data.get("ts")}
@@ -82,11 +91,11 @@ MANIFEST = ConnectorManifest(
     id="slack",
     name="Slack",
     icon="/icons/slack.svg",
-    description="List channels and post messages as your workspace bot.",
+    description="Find channels and people, and post messages as your workspace bot.",
     auth_type="oauth2",
     authorize_url="https://slack.com/oauth/v2/authorize",
     token_url=f"{API}/oauth.v2.access",
-    scopes=["chat:write", "channels:read"],
+    scopes=["chat:write", "channels:read", "users:read"],
     scope_separator=",",
     token_auth_style="basic",
     pkce=False,
@@ -103,7 +112,7 @@ MANIFEST = ConnectorManifest(
         "Create an app at api.slack.com/apps (From scratch) in your workspace.",
         "OAuth & Permissions > Redirect URLs: add the redirect URI below. Slack requires HTTPS, "
         "so use the tunnel (scripts/dev-tunnel) for local development.",
-        "OAuth & Permissions > Bot Token Scopes: add the scopes listed below (chat:write, channels:read).",
+        "OAuth & Permissions > Bot Token Scopes: add the scopes listed below (chat:write, channels:read, users:read).",
         "Basic Information > App Credentials: copy the client ID and client secret here.",
         "After connecting, invite the bot to each channel it should post in (type /invite @YourApp in the "
         "channel): Slack only lets the bot post where it is a member.",
@@ -121,6 +130,13 @@ MANIFEST = ConnectorManifest(
                         "Use to find a channel ID before posting.",
             parameters=object_schema({}),
             risk="read", handler=list_channels,
+        ),
+        ToolDef(
+            name="slack__list_users",
+            description="List the workspace's people (id, username, real name). Use to find a person by name; "
+                        "never ask the user for a Slack user id.",
+            parameters=object_schema({}),
+            risk="read", handler=list_users,
         ),
         ToolDef(
             name="slack__post_message",

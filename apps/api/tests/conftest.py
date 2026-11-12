@@ -34,6 +34,9 @@ def settings() -> Settings:
         oauth_state_secret=base64.b64encode(os.urandom(32)).decode(),
         read_platform_env=False,
         platform_defaults=dict(PLATFORM_DEFAULTS),
+        memory_extraction=False,         # memory tests turn it on; keeps other LLM scripts exact
+        memory_background=False,
+        conversation_summary=False,
     )
 
 

@@ -42,6 +42,24 @@ class Settings(BaseSettings):
     # Per-user daily limits (UTC day). 0 = unlimited.
     daily_chat_message_limit: int = 200
     daily_tool_run_limit: int = 500
+    # Per-run caps (one user message and the tool loop it starts) and a daily token cap. 0 = unlimited.
+    max_run_tokens: int = 60_000
+    max_run_cost_usd: float = 0.25
+    daily_token_limit: int = 600_000
+    # Price used to estimate cost (USD per 1M tokens). Defaults are gpt-4o-mini's list prices; set them for other models.
+    llm_price_input_per_m: float = 0.15
+    llm_price_output_per_m: float = 0.60
+    llm_parallel_tool_calls: bool = True             # model may request several independent reads at once
+    max_parallel_reads: int = 4
+    # Memory. Short-term: the last `history_window` messages plus a rolling summary of everything older.
+    history_window: int = 40
+    history_keep_after_summary: int = 16
+    memory_extraction: bool = True                    # extract durable facts after each chat (needs the user's memory on)
+    conversation_summary: bool = True                 # fold older turns into a rolling summary
+    memory_background: bool = True                    # extract after the answer is sent, not before `done`
+    memory_top_k: int = 5
+    memory_max_per_user: int = 200
+    openai_embedding_model: str = "text-embedding-3-small"   # 1536 dimensions, matches migration 0008
     # Retries for READ tools only, on 429 / 5xx / network errors. Write tools are never retried.
     retry_max_attempts: int = 3
     retry_base_delay_seconds: float = 0.5

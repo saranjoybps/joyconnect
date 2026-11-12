@@ -41,7 +41,7 @@ def test_docs_and_calendar_authorize_urls_ask_for_their_own_scope(client):
 
 def test_manifest_requirements():
     sheets = get_manifest("google_sheets")
-    assert sheets.functional_scopes() == [SPREADSHEETS] and sheets.verifies_scopes
+    assert sheets.functional_scopes() == [SPREADSHEETS, "https://www.googleapis.com/auth/drive.metadata.readonly"] and sheets.verifies_scopes
     assert sheets.permission_name == "Sheets"
     assert get_manifest("google_calendar").permission_name == "Calendar"
 
@@ -61,7 +61,7 @@ def test_callback_stores_scopes_google_actually_granted(client, db):
     assert resp.headers["location"] == "http://localhost:3000/connections?connected=google_sheets&partial=Sheets"
 
     shown = client.get("/api/connections", headers=auth()).json()[0]
-    assert shown["partial"] is True and shown["missing_scopes"] == [SPREADSHEETS]
+    assert shown["partial"] is True and shown["missing_scopes"] == [SPREADSHEETS, "https://www.googleapis.com/auth/drive.metadata.readonly"]
     assert sorted(shown["scopes"]) == sorted(IDENTITY)                # shown on the card
 
 
@@ -69,7 +69,7 @@ def test_callback_stores_scopes_google_actually_granted(client, db):
 def test_callback_full_grant_is_not_partial(client, db):
     _, q = start(client, "google_sheets")
     respx.post("https://oauth2.googleapis.com/token").respond(
-        json=token_response(" ".join([*IDENTITY, SPREADSHEETS])))
+        json=token_response(" ".join([*IDENTITY, SPREADSHEETS, "https://www.googleapis.com/auth/drive.metadata.readonly"])))
     resp = callback(client, "google", code="c", state=q["state"])
     assert resp.headers["location"] == "http://localhost:3000/connections?connected=google_sheets"
     shown = client.get("/api/connections", headers=auth()).json()[0]

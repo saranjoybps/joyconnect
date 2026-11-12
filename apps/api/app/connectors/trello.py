@@ -81,7 +81,7 @@ MANIFEST = api_key_manifest(
                  "Paste the key and the token here."],
     health_tool="trello__list_boards",
     tools=[
-        ToolDef(name="trello__list_boards", description="List the user's open Trello boards.",
+        ToolDef(name="trello__list_boards", description="List the user's open Trello boards (names and ids). Use first to find a board by name; never ask the user for a board id.",
                 parameters=object_schema({}), risk="read", handler=list_boards),
         ToolDef(name="trello__list_lists", description="List the open lists (columns) on a board.",
                 parameters=object_schema({"board_id": {"type": "string", "description": "Board id from list_boards."}}),

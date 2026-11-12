@@ -18,7 +18,7 @@ from tests.test_oauth_flow import start
 
 def test_slack_setup_matches_docs():
     m = get_manifest("slack")
-    assert m.scopes == ["chat:write", "channels:read"]            # users:read: no tool uses it
+    assert m.scopes == ["chat:write", "channels:read", "users:read"]   # users:read: slack__list_users
     assert m.scope_separator == "," and m.token_auth_style == "basic" and m.localhost_redirect == "no"
     guide = " ".join(m.setup_guide)
     assert "HTTPS" in guide and "/invite" in guide and "chat:write" in guide
@@ -38,7 +38,7 @@ def test_notion_setup_uses_the_capability_names_in_the_docs():
 
 def test_authorize_urls_follow_each_providers_docs(client):
     _, slack = start(client, "slack")
-    assert slack["scope"] == "chat:write,channels:read" and "code_challenge" not in slack
+    assert slack["scope"] == "chat:write,channels:read,users:read" and "code_challenge" not in slack
     _, notion = start(client, "notion")
     assert notion["owner"] == "user" and notion["response_type"] == "code"
     _, gh = start(client, "github")

@@ -78,7 +78,9 @@ async def test_failed_tool_call_does_not_break_next_turn(make_client, db, store,
 
     monkeypatch.setattr(db, "insert", flaky)
     evs = events(client.post("/api/chat", json={"message": "add Ada"}, headers=auth()))
-    assert names(evs) == ["tool_result", "token", "done"] and evs[0][1]["ok"] is False
+    # The model claimed "Added Ada." although the call failed: the final-answer check appends the truth.
+    assert names(evs) == ["tool_result", "token", "token", "done"] and evs[0][1]["ok"] is False
+    assert "did not go through" in evs[2][1]["text"]
     conv = db.tables["conversations"][0]["id"]
     monkeypatch.setattr(db, "insert", real_insert)
 

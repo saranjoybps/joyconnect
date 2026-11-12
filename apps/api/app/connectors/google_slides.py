@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import uuid
 
+from app.connectors._google import DRIVE_METADATA, DRIVE_METADATA_LABEL, MIME_SLIDES, search_tool
 from app.connectors._google import google_manifest, path_id
 from app.connectors.base import ToolContext, ToolDef, ToolError, object_schema, raise_for_status
 
@@ -102,10 +103,13 @@ async def add_text(ctx: ToolContext, presentation_id: str, slide_id: str, text: 
 MANIFEST = google_manifest(
     id="google_slides",
     name="Google Slides",
-    description="Create presentations, add slides and add text to decks you share by link or ID.",
-    scopes=["https://www.googleapis.com/auth/presentations"],
+    description="Find your presentations by name, read them, create decks and add slides or text.",
+    scopes=["https://www.googleapis.com/auth/presentations", DRIVE_METADATA],
+    core_scopes=["https://www.googleapis.com/auth/presentations"],
+    scope_labels={DRIVE_METADATA: DRIVE_METADATA_LABEL},
     api_to_enable="Google Slides API",
     tools=[
+        search_tool("google_slides__search_presentations", "Google Slides presentations", MIME_SLIDES),
         ToolDef(
             name="google_slides__create_presentation",
             description="Create a new blank Google Slides presentation with a title.",

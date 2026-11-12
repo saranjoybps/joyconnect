@@ -58,6 +58,16 @@ async def list_tasks(ctx: ToolContext, project_gid: str) -> dict:
                       for t in d["data"]]}
 
 
+async def search(ctx: ToolContext, workspace_gid: str, resource_type: str, query: str | None, count: int | None) -> dict:
+    """Asana typeahead: find projects, tasks, users, tags... by name in one workspace."""
+    d = _check(await ctx.http.get(f"{API}/workspaces/{_gid(workspace_gid, 'workspace_gid')}/typeahead",
+                                  headers=ctx.bearer, params={
+        "resource_type": resource_type, "query": query or "", "count": max(1, min(count or 10, 25)),
+        "opt_fields": "name"}), "Searching Asana")
+    return {"matches": [{"gid": r.get("gid"), "name": r.get("name"), "type": r.get("resource_type")}
+                        for r in d["data"]]}
+
+
 async def create_task(ctx: ToolContext, project_gid: str, name: str, notes: str | None, due_on: str | None) -> dict:
     if not name.strip():
         raise ToolError("name must not be empty")
@@ -87,6 +97,15 @@ MANIFEST = api_key_manifest(
         ToolDef(name="asana__list_projects", description="List active projects in a workspace.",
                 parameters=object_schema({"workspace_gid": {"type": "string", "description": "From list_workspaces."}}),
                 risk="read", handler=list_projects),
+        ToolDef(name="asana__search",
+                description="Find projects, tasks, users, tags, portfolios or teams by name in a workspace (up to "
+                            "25 matches). Use to turn a name into a gid; never ask the user for a gid.",
+                parameters=object_schema({
+                    "workspace_gid": {"type": "string", "description": "From list_workspaces."},
+                    "resource_type": {"enum": ["project", "task", "user", "tag", "portfolio", "team"]},
+                    "query": {"type": ["string", "null"], "description": "Part of the name, or null."},
+                    "count": {"type": ["integer", "null"], "description": "1 to 25, or null for 10."}}),
+                risk="read", handler=search),
         ToolDef(name="asana__list_tasks", description="List tasks in a project (up to 100).",
                 parameters=object_schema({"project_gid": {"type": "string", "description": "From list_projects."}}),
                 risk="read", handler=list_tasks),

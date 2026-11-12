@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
-from app.connectors._google import google_manifest, parse_google_file_id
+from app.connectors._google import (DRIVE_METADATA, DRIVE_METADATA_LABEL, MIME_SHEET, google_manifest,
+                                    parse_google_file_id, search_tool)
 from app.connectors.base import ToolContext, ToolDef, ToolError, object_schema, raise_for_status
 
 API = "https://sheets.googleapis.com/v4/spreadsheets"
 
-SPREADSHEET_ID = {"type": "string", "description": "Spreadsheet ID or full Google Sheets URL pasted by the user."}
+SPREADSHEET_ID = {"type": "string", "description": "Spreadsheet ID (from google_sheets__search_spreadsheets) or a Google Sheets URL the user already gave."}
 RANGE = {"type": "string", "description": "A1 range, e.g. 'Sheet1!A1:D20' or 'Sheet1'."}
 
 
@@ -88,10 +89,13 @@ async def clear_range(ctx: ToolContext, spreadsheet_id: str, range: str) -> dict
 MANIFEST = google_manifest(
     id="google_sheets",
     name="Google Sheets",
-    description="Read and write rows in spreadsheets you share by link or ID.",
-    scopes=["https://www.googleapis.com/auth/spreadsheets"],
+    description="Find your spreadsheets by name, read them, and add or change rows.",
+    scopes=["https://www.googleapis.com/auth/spreadsheets", DRIVE_METADATA],
+    core_scopes=["https://www.googleapis.com/auth/spreadsheets"],
+    scope_labels={DRIVE_METADATA: DRIVE_METADATA_LABEL},
     api_to_enable="Google Sheets API",
     tools=[
+        search_tool("google_sheets__search_spreadsheets", "Google Sheets spreadsheets", MIME_SHEET),
         ToolDef(
             name="google_sheets__get_values",
             description="Read cell values from a range of a Google Sheet. Use to look up or list rows.",

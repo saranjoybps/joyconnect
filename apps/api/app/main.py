@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agent.llm import LLM, OpenAIChat
+from app.agent.memory import Embedder, OpenAIEmbedder
 from app.agent.runtime import AgentRuntime
 from app.core.config import Settings, get_settings
 from app.core.ratelimit import SlidingWindowLimiter
@@ -14,7 +15,9 @@ from app.core.logging import setup_logging
 from app.core.secrets import SecretStore, build_secret_store
 from app.db.client import Database, SupabaseRestDatabase
 from app.oauth import router as oauth_router
-from app.routers import approvals, chat, connections, executions, health, hooks, provider_apps, runs, workflows
+from app.routers import (
+    approvals, chat, connections, executions, health, hooks, memory, provider_apps, runs, workflows,
+)
 from app.workflows.runtime import build_workflow_runtime
 
 
@@ -24,6 +27,7 @@ def create_app(
     secret_store: SecretStore | None = None,
     http: httpx.AsyncClient | None = None,
     llm: LLM | None = None,
+    embedder: Embedder | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
 
@@ -46,7 +50,11 @@ def create_app(
                 llm_holder.append(OpenAIChat(settings))  # raises LLMError if not configured
             return llm_holder[0]
 
-        app.state.runtime = AgentRuntime(app.state.db, app.state.secret_store, app.state.http, settings, llm_factory)
+        def embedder_factory() -> Embedder:
+            return embedder or OpenAIEmbedder(settings)   # a paid call: only when the app runs for real
+
+        app.state.runtime = AgentRuntime(app.state.db, app.state.secret_store, app.state.http, settings, llm_factory,
+                                         embedder_factory)
         rt = build_workflow_runtime(app.state.db, app.state.secret_store, app.state.http, settings, llm_factory)
         app.state.wf_runtime, app.state.workflows, app.state.executions = rt, rt.workflows, rt.executions
         app.state.triggers, app.state.settings = rt.triggers, settings
@@ -69,6 +77,7 @@ def create_app(
     app.include_router(oauth_router.router)
     app.include_router(chat.router)
     app.include_router(approvals.router)
+    app.include_router(memory.router)
     app.include_router(provider_apps.router)
     app.include_router(runs.router)
     app.include_router(workflows.router)

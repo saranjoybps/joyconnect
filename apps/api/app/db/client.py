@@ -164,7 +164,27 @@ class MemoryDatabase:
     async def rpc(self, fn: str, args: Row) -> Any:
         if fn == "claim_next_execution" and fn not in self.rpcs:
             return self._claim_next_execution(**args)
+        if fn == "match_memories" and fn not in self.rpcs:
+            return self._match_memories(**args)
         return self.rpcs[fn](**args)
+
+    def _match_memories(self, p_user_id: str, query_embedding: list[float], match_count: int = 5,
+                        match_threshold: float = 0.25) -> list[Row]:
+        """Same rules as public.match_memories in migration 0008: cosine similarity, one user, best first."""
+        import math
+
+        def cos(a: list[float], b: list[float]) -> float:
+            dot = sum(x * y for x, y in zip(a, b))
+            na, nb = math.sqrt(sum(x * x for x in a)), math.sqrt(sum(y * y for y in b))
+            return dot / (na * nb) if na and nb else 0.0
+
+        hits = []
+        for r in self._rows("memories"):
+            if str(r.get("user_id")) == str(p_user_id) and r.get("embedding"):
+                sim = cos(r["embedding"], query_embedding)
+                if sim >= match_threshold:
+                    hits.append({"id": r["id"], "kind": r.get("kind"), "content": r["content"], "similarity": sim})
+        return sorted(hits, key=lambda h: -h["similarity"])[:min(match_count, 20)]
 
     def _claim_next_execution(self, p_worker: str, p_lease_seconds: int = 300) -> list[Row]:
         """Same rules as the SQL function in migration 0007 (single-threaded, so no SKIP LOCKED needed)."""

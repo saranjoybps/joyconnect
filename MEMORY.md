@@ -49,6 +49,12 @@ Revision plan (CLAUDE.md section 5): workflow engine in steps 1-7 below. Progres
 - [x] Step 3: triggers (manual, schedule, webhook).
 - [x] Step 4: canvas UI (React Flow, palette, config panel, test node, run, publish switch, schedule settings, workflows list).
 - [x] Step 5: chat modes (/custom, /workflow, /<connector>), slash menu, server-side tool scope. **STOPPED here: waiting for the owner go-ahead before Step 6.**
+- [x] Discovery + agent quality (2026-11-12): search/list tools for every connector, drive.metadata.readonly (RESTRICTED scope,
+  owner asked), prompt FIND-DON'T-ASK, Reject stops the task, memory (short-term summary + pgvector long-term + Memory page),
+  guardrails (injection taint, schema validation, caps, daily token limit, final-answer check, PII log redaction),
+  parallel read calls. All tests use mocked LLM/embedder. **Migration 0008 must be applied by the owner**
+  (`cd apps/api; .venv\Scripts\python.exe scripts\apply_migrations.py`); until then memory/usage degrade silently.
+  Existing Google connections show Partial access until reconnected (new scope); Slack needs `users:read`.
 - [ ] Step 6 chat workflow tools + diff review + delete approval · Step 7 AI Agent / LLM / Classify / Extract / Approval nodes.
   Not done from the plan: Runs page grouped by workflow/node (CLAUDE.md 5.9), chat-generated workflow opening on the canvas (step 6).
 

@@ -198,20 +198,25 @@ localhost vs the HTTPS tunnel.
    connector you use (table below).
 2. Google Auth Platform → Audience: External; add yourself under **Test users**.
 3. Data access → add `openid`, `.../auth/userinfo.email` and the scopes in the table (all prefixed
-   `https://www.googleapis.com/auth/`). Nothing here is a restricted scope.
+   `https://www.googleapis.com/auth/`). **One scope is restricted:** `drive.metadata.readonly` (Sheets, Docs,
+   Slides, Forms, Drive). It lets the agent find your files by name ("list my sheets") instead of asking for
+   a link. It reads file names and ids only, never contents. While the app is in Testing mode with you as a
+   Test user it works as is; publishing the app to other users needs Google's restricted-scope verification.
+   After upgrading, existing Google connections show **Partial access**: reconnect and tick the new
+   "View metadata for files in your Drive" permission. Old tools keep working in the meantime.
 4. Clients → Create client → **Web application** → one Authorized redirect URI shared by all Google cards:
    `http://localhost:8000/api/oauth/callback/google`.
 5. Paste the client ID (`…apps.googleusercontent.com`) and secret (`GOCSPX-…`) into any Google card's Set up.
 
 | Connector | API to enable | Scopes to add under Data access |
 | --- | --- | --- |
-| Google Sheets | Google Sheets API | `spreadsheets` |
-| Google Docs | Google Docs API | `documents` |
+| Google Sheets | Google Sheets API | `spreadsheets`, `drive.metadata.readonly` |
+| Google Docs | Google Docs API | `documents`, `drive.metadata.readonly` |
 | Google Calendar | Google Calendar API | `calendar.events`, `calendar.calendarlist.readonly`, `calendar.freebusy` |
 | Gmail | Gmail API | `gmail.send`, `gmail.labels` |
-| Google Drive | Google Drive API | `drive.file` |
-| Google Slides | Google Slides API | `presentations` |
-| Google Forms | Google Forms API | `forms.body`, `forms.responses.readonly` |
+| Google Drive | Google Drive API | `drive.file`, `drive.metadata.readonly` |
+| Google Slides | Google Slides API | `presentations`, `drive.metadata.readonly` |
+| Google Forms | Google Forms API | `forms.body`, `forms.responses.readonly`, `drive.metadata.readonly` |
 | Google Tasks | Google Tasks API | `tasks` |
 | Google Contacts | People API | `contacts` |
 | Google Meet | Google Meet REST API | `meetings.space.created` |
@@ -224,7 +229,8 @@ card shows "Partial access".
 1. https://api.slack.com/apps → Create New App → From scratch → pick your workspace.
 2. OAuth & Permissions → Redirect URLs: `{PUBLIC_API_BASE_URL}/api/oauth/callback/slack`. Slack requires
    HTTPS, so for local use start the tunnel (`scripts/dev-tunnel.sh`) and register the HTTPS URI it prints.
-3. Bot Token Scopes: `chat:write`, `channels:read`. Leave token rotation off.
+3. Bot Token Scopes: `chat:write`, `channels:read`, `users:read` (to find people by name). Leave token rotation off.
+   If you connected Slack before, add `users:read`, then reconnect.
    After connecting, `/invite @YourApp` in each channel the bot should post in (it must be a member).
 4. Basic Information → App Credentials → paste Client ID and Client Secret into Slack's Set up.
 

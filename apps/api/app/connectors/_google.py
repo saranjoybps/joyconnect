@@ -8,7 +8,7 @@ import re
 
 import httpx
 
-from app.connectors.base import (ConnectorManifest, ResolvedApp, TokenSet, ToolDef, oauth_client_fields,
+from app.connectors.base import (ConnectorManifest, ResolvedApp, TokenSet, ToolDef, oauth_client_fields, object_schema,
                                  raise_for_status)
 
 AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -16,6 +16,16 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 # openid + email are non-sensitive and give us a stable account label.
 IDENTITY_SCOPES = ["openid", "email"]
+
+# Lets the agent find files by name (Drive files.list). Classified RESTRICTED by Google (see docs/decisions.md):
+# fine for your own test users, needs Google verification before other people can use it.
+DRIVE_METADATA = "https://www.googleapis.com/auth/drive.metadata.readonly"
+DRIVE_METADATA_LABEL = "View metadata for files in your Drive"     # Google's own wording on the consent screen
+DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files"
+MIME_SHEET = "application/vnd.google-apps.spreadsheet"
+MIME_DOC = "application/vnd.google-apps.document"
+MIME_SLIDES = "application/vnd.google-apps.presentation"
+MIME_FORM = "application/vnd.google-apps.form"
 
 
 def _jwt_claims(id_token: str) -> dict:
@@ -68,7 +78,14 @@ async def google_token_check(ctx) -> dict:
 
 def google_manifest(*, id: str, name: str, description: str, scopes: list[str], tools: list[ToolDef],
                     api_to_enable: str, scope_labels: dict[str, str] | None = None,
-                    health_tool: str | None = None, health_args: dict | None = None) -> ConnectorManifest:
+                    health_tool: str | None = None, health_args: dict | None = None,
+                    core_scopes: list[str] | None = None) -> ConnectorManifest:
+    # Tools that do not name their own scopes need the connector's CORE scopes only, so adding an optional
+    # scope (file search) never breaks the tools an existing connection already had.
+    if core_scopes is not None:
+        for t in tools:
+            if not t.scopes:
+                t.scopes = list(core_scopes)
     return ConnectorManifest(
         health_tool=health_tool, health_args=health_args or {},
         health=None if health_tool else google_token_check,
@@ -99,6 +116,45 @@ def google_manifest(*, id: str, name: str, description: str, scopes: list[str], 
         revoke=google_revoke,
         tools=tools,
     )
+
+
+def q_literal(value: str) -> str:
+    """A Drive query string literal: backslash and single quote escaped (Drive search guide)."""
+    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+async def drive_search(ctx, mime_type: str, query: str | None, limit: int | None) -> dict:
+    """Find the user's files of one type by (part of) the name, newest first. Needs DRIVE_METADATA."""
+    clauses = [f"mimeType = {q_literal(mime_type)}", "trashed = false"]
+    for word in (query or "").split()[:6]:
+        clauses.append(f"name contains {q_literal(word)}")
+    size = max(1, min(limit or 10, 25))
+    resp = await ctx.http.get(DRIVE_FILES_URL, headers=ctx.bearer, params={
+        "q": " and ".join(clauses), "pageSize": size, "orderBy": "modifiedTime desc",
+        "fields": "files(id,name,webViewLink,modifiedTime,owners(displayName)),nextPageToken"})
+    raise_for_status(resp, "Searching Google Drive")
+    data = resp.json()
+    matches = [{"id": f.get("id"), "name": f.get("name"), "url": f.get("webViewLink"),
+                "modified": f.get("modifiedTime"),
+                "owner": ((f.get("owners") or [{}])[0]).get("displayName")} for f in data.get("files", [])]
+    return {"matches": matches, "count": len(matches), "more_available": bool(data.get("nextPageToken")),
+            "note": "Newest first. If several look right, ask the user which one; if exactly one fits, use its id."}
+
+
+def search_tool(tool_name: str, noun: str, mime_type: str) -> ToolDef:
+    """The read-only 'find <noun> by name' tool every Google file connector offers."""
+    async def handler(ctx, query: str | None, limit: int | None) -> dict:
+        return await drive_search(ctx, mime_type, query, limit)
+
+    return ToolDef(
+        name=tool_name,
+        description=f"Find the user's {noun} by name (newest first) and get their ids. Use this FIRST whenever the "
+                    f"user names or describes a file, or asks to list their {noun}; never ask for a link or id you can "
+                    "find. Pass null for query to list the most recent ones.",
+        parameters=object_schema({
+            "query": {"type": ["string", "null"], "description": "Words from the name, or null to list recent."},
+            "limit": {"type": ["integer", "null"], "description": "1 to 25, or null for 10."}}),
+        risk="read", handler=handler, scopes=[DRIVE_METADATA])
 
 
 _ID_RE = re.compile(r"/(?:spreadsheets|document)/d/([a-zA-Z0-9_-]+)")

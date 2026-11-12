@@ -205,7 +205,7 @@ class ToolExecutor:
                                     "Try again shortly, or reconnect it on the Connections page.", "kind": "auth"}
         except httpx.HTTPError as exc:
             log.warning("network error calling %s: %s", bound.tool.name, type(exc).__name__)
-            return False, {"error": f"Could not reach {name}. Try again shortly.", "kind": "server"}
+            return False, {"error": f"Could not reach {name}. Next step: try again in a minute.", "kind": "server"}
         except Exception as exc:  # noqa: BLE001 — report, never crash the loop
             log.exception("tool %s failed: %s", bound.tool.name, type(exc).__name__)
-            return False, {"error": f"{name} returned an unexpected error."}
+            return False, {"error": f"{name} returned an unexpected error. Next step: try again, or tell me what you were doing."}

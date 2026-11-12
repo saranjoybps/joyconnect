@@ -63,7 +63,8 @@ def test_google_authorize_url(client, db):
     url, q = start(client, "google_sheets")
     assert f"{url.scheme}://{url.netloc}{url.path}" == "https://accounts.google.com/o/oauth2/v2/auth"
     assert q["access_type"] == "offline" and q["prompt"] == "consent" and q["include_granted_scopes"] == "true"
-    assert q["scope"].split(" ") == ["openid", "email", "https://www.googleapis.com/auth/spreadsheets"]
+    assert q["scope"].split(" ") == ["openid", "email", "https://www.googleapis.com/auth/spreadsheets",
+                                      "https://www.googleapis.com/auth/drive.metadata.readonly"]
     assert q["redirect_uri"] == "http://localhost:8000/api/oauth/callback/google"
     assert q["code_challenge_method"] == "S256" and q["code_challenge"]
     row = db.tables["oauth_states"][0]
@@ -73,7 +74,7 @@ def test_google_authorize_url(client, db):
 
 def test_slack_authorize_url(client):
     _, q = start(client, "slack")
-    assert q["scope"] == "chat:write,channels:read"
+    assert q["scope"] == "chat:write,channels:read,users:read"
     assert "code_challenge" not in q
 
 
@@ -96,7 +97,8 @@ def test_google_callback_end_to_end(client, db, store):
     _, q = start(client, "google_sheets")
     route = respx.post("https://oauth2.googleapis.com/token").respond(json={
         "access_token": "ya29.A", "refresh_token": "1//R", "expires_in": 3599, "token_type": "Bearer",
-        "scope": "openid email https://www.googleapis.com/auth/spreadsheets", "id_token": _id_token("a@gmail.com"),
+        "scope": "openid email https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.metadata.readonly",
+        "id_token": _id_token("a@gmail.com"),
     })
     resp = callback(client, "google_sheets", code="auth-code", state=q["state"])
     assert resp.status_code == 303

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 
+from app.connectors._google import DRIVE_METADATA, DRIVE_METADATA_LABEL, MIME_FORM, search_tool
 from app.connectors._google import google_manifest, path_id
 from app.connectors.base import ToolContext, ToolDef, ToolError, object_schema, raise_for_status
 
@@ -82,11 +83,13 @@ async def list_responses(ctx: ToolContext, form_id: str, page_size: int) -> dict
 MANIFEST = google_manifest(
     id="google_forms",
     name="Google Forms",
-    description="Create forms, add questions and read responses.",
-    scopes=[BODY, RESPONSES],
+    description="Find your forms by name, create forms, add questions and read responses.",
+    scopes=[BODY, RESPONSES, DRIVE_METADATA],
+    core_scopes=[BODY, RESPONSES],
     api_to_enable="Google Forms API",
-    scope_labels={BODY: "Forms (create and edit)", RESPONSES: "Form responses"},
+    scope_labels={BODY: "Forms (create and edit)", RESPONSES: "Form responses", DRIVE_METADATA: DRIVE_METADATA_LABEL},
     tools=[
+        search_tool("google_forms__search_forms", "Google Forms", MIME_FORM),
         ToolDef(
             name="google_forms__create_form",
             description="Create a new empty Google Form with a title.",

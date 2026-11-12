@@ -56,6 +56,17 @@ async def list_issues(ctx: ToolContext, team_id: str | None, first: int) -> dict
                         "assignee": (i.get("assignee") or {}).get("name")} for i in data["issues"]["nodes"]]}
 
 
+async def search_issues(ctx: ToolContext, query: str, first: int | None) -> dict:
+    """Issues whose title contains the text (Linear filtering guide: title: { containsIgnoreCase })."""
+    data = await gql(ctx.http, ctx.token.access_token,
+                     "query($first:Int,$filter:IssueFilter){ issues(first:$first, filter:$filter){ nodes "
+                     "{ id identifier title url state { name } assignee { name } } } }",
+                     {"first": max(1, min(first or 10, 25)), "filter": {"title": {"containsIgnoreCase": query}}})
+    return {"matches": [{"id": i["id"], "identifier": i["identifier"], "title": i["title"], "url": i["url"],
+                         "state": (i.get("state") or {}).get("name"),
+                         "assignee": (i.get("assignee") or {}).get("name")} for i in data["issues"]["nodes"]]}
+
+
 async def create_issue(ctx: ToolContext, team_id: str, title: str, description: str | None) -> dict:
     if not title.strip():
         raise ToolError("title must not be empty")
@@ -86,6 +97,13 @@ MANIFEST = api_key_manifest(
                 parameters=object_schema({"team_id": {"type": ["string", "null"], "description": "Team id from list_teams, or null."},
                                           "first": {"type": "integer", "description": "1 to 50."}}),
                 risk="read", handler=list_issues),
+        ToolDef(name="linear__search_issues",
+                description="Find issues whose title contains some text (up to 25). Use to turn a description into "
+                            "an issue id; never ask the user for an id.",
+                parameters=object_schema({
+                    "query": {"type": "string", "description": "Text from the title."},
+                    "first": {"type": ["integer", "null"], "description": "1 to 25, or null for 10."}}),
+                risk="read", handler=search_issues),
         ToolDef(name="linear__create_issue", description="Create an issue in a team.",
                 parameters=object_schema({"team_id": {"type": "string", "description": "Team id from list_teams."},
                                           "title": {"type": "string"},

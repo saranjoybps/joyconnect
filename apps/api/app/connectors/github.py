@@ -72,6 +72,25 @@ async def list_issues(ctx: ToolContext, repo: str, state: str | None) -> dict:
     ]}
 
 
+async def search_repositories(ctx: ToolContext, query: str, limit: int | None) -> dict:
+    resp = await ctx.http.get(f"{API}/search/repositories", headers=_h(ctx.token),
+                              params={"q": query, "per_page": max(1, min(limit or 10, 25))})
+    raise_for_status(resp, "Searching repositories")
+    return {"repos": [{"full_name": r["full_name"], "private": r.get("private"), "url": r.get("html_url"),
+                       "description": r.get("description")} for r in resp.json().get("items", [])]}
+
+
+async def search_issues(ctx: ToolContext, query: str, kind: str, limit: int | None) -> dict:
+    """GitHub requires `is:issue` or `is:pull-request` for GitHub App user tokens (search docs)."""
+    qualifier = "is:pull-request" if kind == "pull_request" else "is:issue"
+    resp = await ctx.http.get(f"{API}/search/issues", headers=_h(ctx.token),
+                              params={"q": f"{query} {qualifier}", "per_page": max(1, min(limit or 10, 25))})
+    raise_for_status(resp, "Searching issues")
+    return {"items": [{"repo": (i.get("repository_url") or "").removeprefix(f"{API}/repos/"), "number": i["number"],
+                       "title": i["title"], "state": i["state"], "url": i.get("html_url")}
+                      for i in resp.json().get("items", [])]}
+
+
 async def create_issue(ctx: ToolContext, repo: str, title: str, body: str) -> dict:
     resp = await ctx.http.post(f"{API}/repos/{_repo(repo)}/issues", headers=_h(ctx.token),
                                json={"title": title, "body": body})
@@ -141,6 +160,25 @@ MANIFEST = ConnectorManifest(
                           "description": "Issue state filter; null means open."},
             }),
             risk="read", handler=list_issues,
+        ),
+        ToolDef(
+            name="github__search_repositories",
+            description="Find repositories by keywords (GitHub search syntax allowed, e.g. 'user:octocat api'). Use "
+                        "to turn a name into owner/repo; never ask the user for the full name.",
+            parameters=object_schema({
+                "query": {"type": "string"},
+                "limit": {"type": ["integer", "null"], "description": "1 to 25, or null for 10."}}),
+            risk="read", handler=search_repositories,
+        ),
+        ToolDef(
+            name="github__search_issues",
+            description="Find issues or pull requests by keywords (add 'repo:owner/name' to narrow). Returns repo, "
+                        "number, title and state.",
+            parameters=object_schema({
+                "query": {"type": "string"},
+                "kind": {"enum": ["issue", "pull_request"]},
+                "limit": {"type": ["integer", "null"], "description": "1 to 25, or null for 10."}}),
+            risk="read", handler=search_issues,
         ),
         ToolDef(
             name="github__create_issue",

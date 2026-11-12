@@ -15,9 +15,9 @@ from tests.test_oauth_flow import start
 G = "https://www.googleapis.com/auth/"
 EXPECTED_SCOPES = {
     "gmail": [G + "gmail.send", G + "gmail.labels"],
-    "google_drive": [G + "drive.file"],
-    "google_slides": [G + "presentations"],
-    "google_forms": [G + "forms.body", G + "forms.responses.readonly"],
+    "google_drive": [G + "drive.file", G + "drive.metadata.readonly"],
+    "google_slides": [G + "presentations", G + "drive.metadata.readonly"],
+    "google_forms": [G + "forms.body", G + "forms.responses.readonly", G + "drive.metadata.readonly"],
     "google_tasks": [G + "tasks"],
     "google_contacts": [G + "contacts"],
     "google_meet": [G + "meetings.space.created"],
@@ -25,6 +25,9 @@ EXPECTED_SCOPES = {
 }
 RESTRICTED = ("gmail.readonly", "gmail.modify", "gmail.compose", "gmail.metadata",
               "drive.readonly", "drive.metadata", "mail.google.com")
+# The owner asked for file discovery ("list my sheets"), which needs this one RESTRICTED scope. It is the only
+# exception and it is read-only; see docs/decisions.md.
+ALLOWED_RESTRICTED = {G + "drive.metadata.readonly"}
 
 
 @pytest.fixture
@@ -48,9 +51,9 @@ def test_authorize_url_requests_exactly_the_connector_scopes(client, cid, scopes
 def test_no_restricted_scopes_anywhere():
     for m in all_manifests().values():
         for s in m.scopes:
-            assert not any(r in s for r in RESTRICTED), (m.id, s)
+            assert s in ALLOWED_RESTRICTED or not any(r in s for r in RESTRICTED), (m.id, s)
             assert not s.endswith("/auth/drive"), (m.id, s)
-    assert all_manifests()["google_drive"].scopes[-1] == G + "drive.file"
+    assert G + "drive.file" in all_manifests()["google_drive"].scopes
     assert G + "drive" not in all_manifests()["google_drive"].scopes
 
 

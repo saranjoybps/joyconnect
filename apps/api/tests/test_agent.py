@@ -114,9 +114,9 @@ async def test_tools_only_from_active_connections(db, store):
 async def test_tool_cap_prefers_mentioned_connectors(db, store):
     for p in ("google_sheets", "google_docs", "google_calendar", "slack", "notion", "github"):
         await connect(db, store, p)
-    tools = await available_tools(db, USER_A, "post the summary in slack and make a notion page", 6)
+    tools = await available_tools(db, USER_A, "post the summary in slack and make a notion page", 7)
     assert {b.manifest.id for b in tools.values()} == {"slack", "notion"}
-    assert len(tools) <= 6
+    assert len(tools) <= 7
 
 
 # ------------------------------------------------------------------ loop
@@ -181,10 +181,7 @@ async def test_write_requires_approval_then_runs(make_client, db, store):
 @respx.mock
 async def test_rejected_approval_is_reported_to_model(make_client, db, store):
     await connect(db, store, "slack")
-    llm = FakeLLM(
-        call("slack__post_message", {"channel": "C1", "text": "hello"}),
-        lambda msgs: LLMResult(content="OK, I did not post it." if "declined" in msgs[-1]["content"] else "??"),
-    )
+    llm = FakeLLM(call("slack__post_message", {"channel": "C1", "text": "hello"}))
     client = make_client(llm)
     evs = events(client.post("/api/chat", json={"message": "post hello in #general"}, headers=auth()))
     approval_id = evs[0][1]["approval_id"]
@@ -192,7 +189,8 @@ async def test_rejected_approval_is_reported_to_model(make_client, db, store):
     evs = events(client.post(f"/api/approvals/{approval_id}/decision", json={"approve": False}, headers=auth()))
     assert names(evs) == ["tool_result", "token", "done"]
     assert evs[0][1]["ok"] is False
-    assert evs[1][1]["text"] == "OK, I did not post it."
+    assert "you rejected it, so nothing was changed" in evs[1][1]["text"]
+    assert len(llm.calls) == 1          # Reject stops the task: the model is not asked to continue
     assert not route.called
     assert db.tables["tool_runs"][0]["status"] == "rejected"
 

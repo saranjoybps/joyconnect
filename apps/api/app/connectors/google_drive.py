@@ -1,8 +1,10 @@
-"""Google Drive with the drive.file scope only.
+"""Google Drive: drive.file (create, non-sensitive) plus drive.metadata.readonly (search, RESTRICTED).
 
 drive.file (docs: developers.google.com/workspace/drive/api/guides/api-specific-auth) is
 non-sensitive: the app can only see files and folders it created (or the user opened with it).
-NOT used: drive, drive.readonly, drive.metadata* (all RESTRICTED).
+drive.metadata.readonly is classified RESTRICTED by the same page: it lets the agent FIND files by name
+(files.list accepts it). Added at the owner's request; see docs/decisions.md.
+NOT used: drive, drive.readonly (RESTRICTED, and they expose file contents).
 Multipart upload format and the 5 MB limit: .../drive/api/guides/manage-uploads.
 """
 
@@ -11,7 +13,7 @@ from __future__ import annotations
 import json
 import uuid
 
-from app.connectors._google import google_manifest, path_id
+from app.connectors._google import DRIVE_METADATA, DRIVE_METADATA_LABEL, google_manifest, path_id
 from app.connectors.base import ToolContext, ToolDef, ToolError, object_schema, raise_for_status
 
 API = "https://www.googleapis.com/drive/v3/files"
@@ -95,15 +97,35 @@ async def list_files(ctx: ToolContext, name_contains: str | None, folder_id: str
             "note": "Only files and folders created by this app are visible (drive.file scope)."}
 
 
+async def search_files(ctx: ToolContext, query: str | None, limit: int | None) -> dict:
+    clauses = ["trashed = false"] + [f"name contains {_q_literal(w)}" for w in (query or "").split()[:6]]
+    resp = await ctx.http.get(API, headers=ctx.bearer, params={
+        "q": " and ".join(clauses), "pageSize": max(1, min(limit or 10, 25)), "orderBy": "modifiedTime desc",
+        "fields": f"files({FIELDS}),nextPageToken"})
+    raise_for_status(resp, "Searching Google Drive")
+    data = resp.json()
+    files = [_file(f) for f in data.get("files", [])]
+    return {"matches": files, "count": len(files), "more_available": bool(data.get("nextPageToken")),
+            "note": "Newest first. If several look right, ask the user which one."}
+
+
 MANIFEST = google_manifest(
     id="google_drive",
     name="Google Drive",
-    description="Create folders and text files, and list the files this app created. "
-                "Cannot see the rest of your Drive.",
-    scopes=[FILE_SCOPE],
+    description="Search your Drive by name, and create folders and text files.",
+    scopes=[FILE_SCOPE, DRIVE_METADATA],
+    core_scopes=[FILE_SCOPE],
+    scope_labels={DRIVE_METADATA: DRIVE_METADATA_LABEL},
     api_to_enable="Google Drive API",
     health_tool="google_drive__list_files", health_args={"name_contains": None, "folder_id": None, "page_size": 1},
     tools=[
+        ToolDef(
+            name="google_drive__search_files",
+            description="Find any file or folder in the user's Drive by name (newest first) and get its id, type and link. Use this FIRST when the user names a file or asks what is in Drive; never ask for a link or id you can find. Pass null for query to list recent files.",
+            parameters=object_schema({
+                "query": {"type": ["string", "null"], "description": "Words from the name, or null."},
+                "limit": {"type": ["integer", "null"], "description": "1 to 25, or null for 10."}}),
+            risk="read", handler=search_files, scopes=[DRIVE_METADATA]),
         ToolDef(
             name="google_drive__create_folder",
             description="Create a folder in the user's Drive (optionally inside a folder this app created).",
