@@ -7,6 +7,7 @@ vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: vi.fn() }));
 
 import { ChatWindow } from "@/components/ChatWindow";
 import { chatApi } from "@/lib/chat";
+import { CHAT_OPEN, emit } from "@/lib/chatBus";
 import { connectionsApi } from "@/lib/connections";
 import { exactMode, filterModes, nextIndex, slashQuery, type ChatMode } from "@/lib/modes";
 
@@ -137,14 +138,14 @@ describe("sending in a mode", () => {
     await userEvent.type(box, "/");
     await userEvent.click(screen.getByRole("option", { name: /\/trello/ }));
     await userEvent.type(box, "list my boards{Enter}");
-    await waitFor(() => expect(send).toHaveBeenCalledWith("list my boards", null, "trello"));
+    await waitFor(() => expect(send).toHaveBeenCalledWith("list my boards", null, "trello", expect.any(AbortSignal)));
   });
 
   it("sends /custom by default", async () => {
     const send = vi.spyOn(chatApi, "send").mockReturnValue(stream({ event: "done", data: { conversation_id: "c1" } }));
     const box = await ready();
     await userEvent.type(box, "hello{Enter}");
-    await waitFor(() => expect(send).toHaveBeenCalledWith("hello", null, "custom"));
+    await waitFor(() => expect(send).toHaveBeenCalledWith("hello", null, "custom", expect.any(AbortSignal)));
   });
 
   it("typing a bare command and pressing Enter (menu dismissed) switches mode without sending", async () => {
@@ -173,7 +174,7 @@ describe("sending in a mode", () => {
       mode: { command: "trello", kind: "connector", connector: "trello" },
     });
     await ready();
-    await userEvent.click(await screen.findByRole("button", { name: "Boards" }));
+    emit(CHAT_OPEN, "c9");
     await waitFor(() => expect(chip()).toHaveTextContent("/trello"));
   });
 });

@@ -11,7 +11,8 @@ export type Block =
   | { t: "p"; inline: Inline[] }
   | { t: "h"; level: 1 | 2 | 3; inline: Inline[] }
   | { t: "ul" | "ol"; items: Inline[][] }
-  | { t: "code"; v: string };
+  | { t: "code"; v: string; lang?: string }
+  | { t: "table"; head: Inline[][]; rows: Inline[][][] };
 
 const HTTP = /^https?:\/\/[^\s<>"']+$/i;
 const INLINE = /(\*\*[^*\n]+\*\*|`[^`\n]+`|\[[^\]\n]+\]\([^)\s]+\)|https?:\/\/[^\s<>"')\]]+|\*[^*\n]+\*)/g;
@@ -36,6 +37,10 @@ export function parseInline(src: string): Inline[] {
   return out;
 }
 
+const isRow = (l: string) => l.includes("|") && l.trim() !== "";
+const isSeparator = (l: string) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l) && l.includes("|");
+const cells = (l: string) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+
 export function parseMarkdown(src: string): Block[] {
   const blocks: Block[] = [];
   const lines = src.replace(/\r\n/g, "\n").split("\n");
@@ -52,8 +57,19 @@ export function parseMarkdown(src: string): Block[] {
     if (line.trim().startsWith("```")) {
       flush();
       const code: string[] = [];
+      const lang = line.trim().slice(3).trim().split(/\s+/)[0];
       for (i++; i < lines.length && !lines[i].trim().startsWith("```"); i++) code.push(lines[i]);
-      blocks.push({ t: "code", v: code.join("\n") });
+      blocks.push(lang ? { t: "code", v: code.join("\n"), lang } : { t: "code", v: code.join("\n") });
+      continue;
+    }
+    // GitHub-style table: a header row, a separator row of dashes, then body rows.
+    if (isRow(line) && i + 1 < lines.length && isSeparator(lines[i + 1])) {
+      flush();
+      const head = cells(line).map(parseInline);
+      const rows: Inline[][][] = [];
+      for (i += 2; i < lines.length && isRow(lines[i]); i++) rows.push(cells(lines[i]).map(parseInline));
+      i--;
+      blocks.push({ t: "table", head, rows });
       continue;
     }
     const h = /^(#{1,3})\s+(.*)$/.exec(line);

@@ -3,6 +3,9 @@
 import { useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { safeNextPath } from "@/lib/routes";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Field";
+import { LogoMark } from "@/components/ui/icons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export function LoginForm() {
@@ -51,43 +54,34 @@ export function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-sm space-y-6">
-      <h1 className="text-2xl font-semibold">{mode === "signin" ? "Sign in" : "Create account"}</h1>
+    <div className="anim-fade-up w-full max-w-sm space-y-8">
+      <div className="space-y-2 text-center">
+        <LogoMark width={28} height={28} className="mx-auto" />
+        <h1 className="text-2xl font-semibold tracking-tight">{mode === "signin" ? "Sign in" : "Create account"}</h1>
+        <p className="text-sm text-muted">Connect your apps, then chat to get things done.</p>
+      </div>
       <form onSubmit={onSubmit} className="space-y-4" aria-describedby={message ? "login-msg" : undefined}>
         <label className="block">
-          <span className="text-sm font-medium">Email</span>
-          <input
-            type="email" required autoComplete="email" value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border border-neutral-300 bg-transparent px-3 py-2 dark:border-neutral-700"
-          />
+          <span className="mb-1.5 block text-sm font-medium">Email</span>
+          <Input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
         <label className="block">
-          <span className="text-sm font-medium">Password</span>
-          <input
-            type="password" required minLength={8} value={password}
+          <span className="mb-1.5 block text-sm font-medium">Password</span>
+          <Input type="password" required minLength={8} value={password}
             autoComplete={mode === "signin" ? "current-password" : "new-password"}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-md border border-neutral-300 bg-transparent px-3 py-2 dark:border-neutral-700"
-          />
+            onChange={(e) => setPassword(e.target.value)} />
         </label>
-        <button
-          type="submit" disabled={busy}
-          className="w-full rounded-md bg-neutral-900 px-3 py-2 font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
-        >
+        <Button type="submit" size="lg" disabled={busy} className="w-full">
           {mode === "signin" ? "Sign in" : "Sign up"}
-        </button>
+        </Button>
       </form>
-      <button
-        type="button" onClick={onGoogle} disabled={busy}
-        className="w-full rounded-md border border-neutral-300 px-3 py-2 font-medium disabled:opacity-50 dark:border-neutral-700"
-      >
+      <Button variant="secondary" size="lg" onClick={onGoogle} disabled={busy} className="w-full">
         Continue with Google
-      </button>
-      {message && <p id="login-msg" role="status" className="text-sm text-red-600 dark:text-red-400">{message}</p>}
-      <p className="text-sm">
+      </Button>
+      {message && <p id="login-msg" role="status" className="text-sm text-bad">{message}</p>}
+      <p className="text-center text-sm text-muted">
         {mode === "signin" ? "No account?" : "Have an account?"}{" "}
-        <button type="button" className="underline" onClick={() => setMode(mode === "signin" ? "signup" : "signin")}>
+        <button type="button" className="font-medium text-foreground underline underline-offset-4" onClick={() => setMode(mode === "signin" ? "signup" : "signin")}>
           {mode === "signin" ? "Sign up" : "Sign in"}
         </button>
       </p>

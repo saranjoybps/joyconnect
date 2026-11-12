@@ -1,4 +1,4 @@
-export const PROTECTED_PREFIXES = ["/chat", "/connections", "/workflows", "/runs", "/memory"];
+export const PROTECTED_PREFIXES = ["/chat", "/connections", "/workflows", "/runs", "/memory", "/settings"];
 export const AUTH_PAGES = ["/login"];
 
 export function isProtectedPath(pathname: string): boolean {

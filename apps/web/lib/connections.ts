@@ -180,3 +180,28 @@ const ERROR_TEXT: Record<string, string> = {
 export function describeOAuthError(code: string): string {
   return ERROR_TEXT[code] ?? `The app returned an error (${code}).`;
 }
+
+export const CATEGORIES = ["Google Workspace", "Productivity", "Communication", "Developer", "Payments"] as const;
+export type Category = (typeof CATEGORIES)[number];
+
+const CATEGORY_BY_ID: Record<string, Category> = {
+  gmail: "Google Workspace",
+  notion: "Productivity", airtable: "Productivity", asana: "Productivity", trello: "Productivity", linear: "Productivity",
+  slack: "Communication",
+  github: "Developer",
+  stripe: "Payments",
+};
+
+/** Filter category for a connector id; every google_* app is Google Workspace. */
+export function categoryOf(id: string): Category {
+  if (id.startsWith("google_")) return "Google Workspace";
+  return CATEGORY_BY_ID[id] ?? "Productivity";
+}
+
+export const CARD_BADGE: Record<CardState, { text: string; tone: "neutral" | "success" | "warning" | "error" }> = {
+  not_set_up: { text: "Not set up", tone: "neutral" },
+  ready: { text: "Ready to connect", tone: "neutral" },
+  partial: { text: "Partial access", tone: "warning" },
+  connected: { text: "Connected", tone: "success" },
+  needs_reconnect: { text: "Needs reconnect", tone: "warning" },
+};

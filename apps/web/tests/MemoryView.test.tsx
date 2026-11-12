@@ -65,6 +65,7 @@ describe("MemoryView", () => {
     await userEvent.click(await screen.findByRole("button", { name: /Delete memory/ }));
     await waitFor(() => expect(remove).toHaveBeenCalledWith("m1"));
     await userEvent.click(screen.getByRole("button", { name: "Delete all memories" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Yes, delete everything" }));
     await waitFor(() => expect(removeAll).toHaveBeenCalled());
   });
 

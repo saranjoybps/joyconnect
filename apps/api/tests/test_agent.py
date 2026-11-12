@@ -303,3 +303,35 @@ def test_delete_conversation_removes_it_and_its_messages(make_client, db):
     assert client.delete(f"/api/conversations/{conv_id}", headers=auth()).status_code == 404
     assert client.get(f"/api/conversations/{other}", headers=auth()).status_code == 200
     assert client.delete(f"/api/conversations/{conv_id}").status_code == 401
+
+
+def test_rename_and_rewind_conversation(make_client, db):
+    client = make_client(FakeLLM(LLMResult(content="One"), LLMResult(content="Two"), LLMResult(content="Three")))
+    cid = events(client.post("/api/chat", json={"message": "first"}, headers=auth()))[-1][1]["conversation_id"]
+    events(client.post("/api/chat", json={"message": "second", "conversation_id": cid}, headers=auth()))
+    # rename: validated, owner only
+    assert client.patch(f"/api/conversations/{cid}", json={"title": "  My plan "}, headers=auth()).json()["title"] == "My plan"
+    assert client.patch(f"/api/conversations/{cid}", json={"title": ""}, headers=auth()).status_code == 422
+    assert client.patch(f"/api/conversations/{cid}", json={"title": "x"}, headers=auth(USER_B)).status_code == 404
+    assert client.get("/api/conversations", headers=auth()).json()[0]["title"] == "My plan"
+    # rewind to the second user message: it and its reply go, the first exchange stays
+    r = client.post(f"/api/conversations/{cid}/rewind", json={"user_index": 1}, headers=auth())
+    assert r.json() == {"ok": True, "text": "second", "removed": 2}
+    items = client.get(f"/api/conversations/{cid}", headers=auth()).json()["items"]
+    assert [i["text"] for i in items] == ["first", "One"]
+    assert client.post(f"/api/conversations/{cid}/rewind", json={"user_index": 5}, headers=auth()).status_code == 404
+    assert client.post(f"/api/conversations/{cid}/rewind", json={"user_index": 0}, headers=auth(USER_B)).status_code == 404
+
+
+def test_tool_events_carry_input_output_and_duration(make_client, db, store):
+    import asyncio
+    asyncio.run(connect(db, store, "google_sheets", auto=True))
+    args = {"spreadsheet_id": SHEET, "range": "Sheet1!A:B", "values": ["Ada", "ada@x.com"]}
+    client = make_client(FakeLLM(call("google_sheets__append_row", args), LLMResult(content="Done.")))
+    with respx.mock:
+        respx.post(url__regex=r".*sheets\.googleapis\.com.*").respond(200, json={"updates": {"updatedRange": "Sheet1!A2:B2"}})
+        evs = events(client.post("/api/chat", json={"message": "add"}, headers=auth()))
+    tc = next(d for e, d in evs if e == "tool_call")
+    tr = next(d for e, d in evs if e == "tool_result")
+    assert tc["input"]["range"] == "Sheet1!A:B"
+    assert isinstance(tr["duration_ms"], int) and "updated_range" in tr["output"]

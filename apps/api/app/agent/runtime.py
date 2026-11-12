@@ -60,16 +60,21 @@ def _ev(event: str, **data: Any) -> Event:
     return {"event": event, "data": data}
 
 
+MAX_OUTPUT_CHARS = 4000   # the output shown in a tool card; the model sees MAX_RESULT_CHARS
+
+
 def _result_text(result: Any) -> str:
     text = json.dumps(result, default=str, ensure_ascii=False)
     return text if len(text) <= MAX_RESULT_CHARS else text[:MAX_RESULT_CHARS] + '…"(truncated)"'
 
 
-def _result_ev(call_id: str, tool: str, ok: bool, result: Any, summary: str | None = None) -> Event:
+def _result_ev(call_id: str, tool: str, ok: bool, result: Any, summary: str | None = None,
+               duration_ms: int | None = None) -> Event:
     """tool_result event: the legacy fields plus the validated Action (`action`), when it validates."""
     action = build_action(call_id, tool, ok, result)
     return _ev("tool_result", id=call_id, tool=tool, ok=ok, summary=summary if summary is not None
-               else _summary(ok, result), action=action.model_dump() if action else None)
+               else _summary(ok, result), action=action.model_dump() if action else None,
+               duration_ms=duration_ms, output=_result_text(result)[:MAX_OUTPUT_CHARS])
 
 
 def _summary(ok: bool, result: Any) -> str:
@@ -173,6 +178,8 @@ class AgentRuntime:
                                   "It resets at midnight UTC.")
         await self._save_message(user_id, conversation_id, "user", content=text)
         memories = await self.memory.retrieve(user_id, text)
+        if memories:
+            yield _ev("memory", count=len(memories))
         async for ev in self._loop(user_id, conversation_id, text, memories):
             yield ev
 
@@ -230,11 +237,11 @@ class AgentRuntime:
             elif bound is None or args is None:
                 ok, result = False, {"error": "This app is no longer connected."}
             else:
-                yield self._tool_call_event(tool_call_id, bound)
+                yield self._tool_call_event(tool_call_id, bound, args)
                 ok, result, ms = await self.executor.execute_timed(bound, args)
             await self._finish_call(user_id, conversation_id, approval["tool_run_id"], tool_call_id, ok, result,
                                     "ok" if ok else "error", ms)
-            ev = _result_ev(tool_call_id, preview["tool"], ok, result)
+            ev = _result_ev(tool_call_id, preview["tool"], ok, result, duration_ms=ms)
             if ev["data"].get("action"):
                 actions.append(Action(**ev["data"]["action"]))
             yield ev
@@ -378,8 +385,8 @@ class AgentRuntime:
         last_user = max((i for i, r in enumerate(rows) if r["role"] == "user"), default=-1)
         return any(r["role"] == "tool" and looks_injected(r.get("content")) for r in rows[last_user + 1:])
 
-    def _tool_call_event(self, call_id: str, bound: BoundTool) -> Event:
-        return _ev("tool_call", id=call_id, tool=bound.tool.name, connector=bound.manifest.id,
+    def _tool_call_event(self, call_id: str, bound: BoundTool, args: dict[str, Any] | None = None) -> Event:
+        return _ev("tool_call", id=call_id, input=redact_args(args or {}), tool=bound.tool.name, connector=bound.manifest.id,
                    connector_name=bound.manifest.name, risk=bound.tool.risk, label=tool_label(bound.tool))
 
     async def _handle_call(self, user_id: str, conversation_id: str, call: dict[str, Any],
@@ -466,10 +473,10 @@ class AgentRuntime:
             yield _ev("approval_required", approval_id=approval["id"], **preview)
             return
 
-        yield self._tool_call_event(call_id, bound)
+        yield self._tool_call_event(call_id, bound, args)
         ok, result, ms = await self.executor.execute_timed(bound, args)
         await self._finish_call(user_id, conversation_id, run["id"], call_id, ok, result, "ok" if ok else "error", ms)
-        yield _result_ev(call_id, name, ok, result)
+        yield _result_ev(call_id, name, ok, result, duration_ms=ms)
 
     # ------------------------------------------------------------------ persistence helpers
 

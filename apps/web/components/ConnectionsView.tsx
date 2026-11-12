@@ -3,17 +3,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ConnectionCard } from "@/components/ConnectionCard";
+import { ConnectModal } from "@/components/connections/ConnectModal";
+import { Card, EmptyState, PageHeader, Skeleton } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Field";
+import { SearchIcon } from "@/components/ui/icons";
+import { useToast } from "@/components/ui/Toast";
 import {
-  connectionsApi, describeOAuthError, type Connection, type Connector,
+  CATEGORIES, categoryOf, connectionsApi, describeOAuthError, type Connection, type Connector,
 } from "@/lib/connections";
 
 export function ConnectionsView() {
   const params = useSearchParams();
   const router = useRouter();
+  const { toast } = useToast();
   const [connectors, setConnectors] = useState<Connector[] | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<string>("All");
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const notice = useMemo(() => {
     const connected = params.get("connected");
@@ -43,14 +52,16 @@ export function ConnectionsView() {
     return () => { alive = false; };
   }, [reloadKey]);
 
-  async function run(action: () => Promise<unknown>) {
+  async function run(action: () => Promise<unknown>, done?: (r: unknown) => void) {
     setBusy(true);
     setError(null);
     try {
-      await action();
+      const r = await action();
+      done?.(r);
       setReloadKey((k) => k + 1);
     } catch (e) {
       setError((e as Error).message);
+      toast((e as Error).message, "error");
     } finally {
       setBusy(false);
     }
@@ -69,50 +80,96 @@ export function ConnectionsView() {
       setBusy(false);
     } catch (e) {
       setError((e as Error).message);
+      toast((e as Error).message, "error");
       setReloadKey((k) => k + 1);
       setBusy(false);
     }
   }
 
+  const categories = useMemo(() => {
+    const present = new Set((connectors ?? []).map((c) => categoryOf(c.id)));
+    return ["All", ...CATEGORIES.filter((c) => present.has(c))];
+  }, [connectors]);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (connectors ?? []).filter((c) =>
+      (category === "All" || categoryOf(c.id) === category) &&
+      (!q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)));
+  }, [connectors, query, category]);
+
+  const open = connectors?.find((c) => c.id === openId) ?? null;
+
   return (
-    <section aria-labelledby="connections-title" className="space-y-4">
-      <div>
-        <h1 id="connections-title" className="text-xl font-semibold">Connections</h1>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          Set up each app with your own developer credentials, then connect. Secrets and tokens stay on the server and are never sent back to your browser.
-        </p>
-      </div>
+    <section aria-labelledby="connections-title" className="space-y-6">
+      <PageHeader id="connections-title" title="Connections"
+        description="Set up each app with your own developer credentials, then connect. Secrets and tokens stay on the server and are never sent back to your browser." />
 
       {notice && (
         <div role="status"
-          className={`flex items-center justify-between rounded-lg p-3 text-sm ${notice.kind === "error"
-            ? "bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200"
-            : notice.kind === "warn"
-              ? "bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100"
-              : "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"}`}>
+          className={`flex items-center justify-between gap-3 rounded-xl border p-3.5 text-sm ${notice.kind === "error" ? "border-bad/40 text-bad" : notice.kind === "warn" ? "border-warn/40 text-warn" : "border-ok/40 text-ok"}`}>
           <span>{notice.text}</span>
-          <button type="button" className="underline" onClick={() => router.replace("/connections")}>Dismiss</button>
+          <button type="button" className="underline underline-offset-4" onClick={() => router.replace("/connections")}>Dismiss</button>
         </div>
       )}
-      {error && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{error}</p>}
+      {error && <p role="alert" className="text-sm text-bad">{error}</p>}
 
-      {connectors === null && !error && <p className="text-sm text-neutral-500">Loading…</p>}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {connectors?.map((c) => (
-          <ConnectionCard
-            key={c.id}
-            connector={c}
-            connections={connections.filter((x) => x.provider === c.id)}
-            busy={busy}
-            onConnect={connect}
-            onDisconnect={(conn) => run(() => connectionsApi.disconnect(conn.id))}
-            onToggleAutoApprove={(conn, v) => run(() => connectionsApi.setAutoApprove(conn.id, v))}
-            onTest={(conn) => run(() => connectionsApi.test(conn.id))}
-            onSetupChanged={() => setReloadKey((k) => k + 1)}
-          />
-        ))}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-full sm:w-72">
+          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+          <label htmlFor="connector-search" className="sr-only">Search apps</label>
+          <Input id="connector-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search apps" className="pl-9" />
+        </div>
+        <div role="group" aria-label="Filter by category" className="flex flex-wrap gap-2">
+          {categories.map((c) => (
+            <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)}
+              className={`h-8 rounded-full border px-3 text-xs font-medium transition-colors ${category === c ? "border-accent bg-accent text-accent-fg" : "border-line text-muted hover:border-line-strong hover:text-foreground"}`}>
+              {c}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {connectors === null && !error && (
+        <div aria-label="Loading apps" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }, (_, i) => (
+            <Card key={i} className="space-y-4 p-5"><Skeleton className="size-11" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-9 w-full" /></Card>
+          ))}
+        </div>
+      )}
+
+      {connectors !== null && visible.length === 0 && (
+        <EmptyState title="No apps match" action={
+          <button type="button" className="text-sm underline underline-offset-4" onClick={() => { setQuery(""); setCategory("All"); }}>Clear filters</button>
+        }>
+          Try a different search or category.
+        </EmptyState>
+      )}
+
+      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {visible.map((c) => (
+          <li key={c.id}>
+            <ConnectionCard connector={c} connections={connections.filter((x) => x.provider === c.id)} onOpen={(x) => setOpenId(x.id)} />
+          </li>
+        ))}
+      </ul>
+
+      {open && (
+        <ConnectModal
+          key={open.id}
+          connector={open}
+          connections={connections.filter((x) => x.provider === open.id)}
+          busy={busy}
+          onClose={() => setOpenId(null)}
+          onConnect={connect}
+          onDisconnect={(conn) => run(() => connectionsApi.disconnect(conn.id), () => toast("Disconnected", "success"))}
+          onToggleAutoApprove={(conn, v) => run(() => connectionsApi.setAutoApprove(conn.id, v))}
+          onTest={(conn) => run(() => connectionsApi.test(conn.id),
+            (r) => { const h = r as { ok: boolean; message: string }; toast(h.message, h.ok ? "success" : "error"); })}
+          onSetupChanged={() => setReloadKey((k) => k + 1)}
+        />
+      )}
     </section>
   );
 }

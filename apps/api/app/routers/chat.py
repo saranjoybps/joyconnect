@@ -112,3 +112,42 @@ async def delete_conversation(conversation_id: str, user: UserDep, db: DbDep) ->
     await db.delete("messages", {"conversation_id": conversation_id, "user_id": user.id})
     await db.delete("conversations", {"id": conversation_id, "user_id": user.id})
     return {"ok": True}
+
+
+class RenameBody(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+
+
+@router.patch("/conversations/{conversation_id}")
+async def rename_conversation(conversation_id: str, body: RenameBody, user: UserDep, db: DbDep) -> dict[str, Any]:
+    if not await db.select("conversations", {"id": conversation_id, "user_id": user.id}):
+        raise HTTPException(404, "conversation not found")
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(422, "The title cannot be empty.")
+    await db.update("conversations", {"id": conversation_id, "user_id": user.id}, {"title": title})
+    return {"id": conversation_id, "title": title}
+
+
+class RewindBody(BaseModel):
+    user_index: int = Field(ge=0)
+
+
+@router.post("/conversations/{conversation_id}/rewind")
+async def rewind_conversation(conversation_id: str, body: RewindBody, user: UserDep, db: DbDep) -> dict[str, Any]:
+    """Drop the n-th user message (0-based) and everything after it, so the UI can regenerate the reply or
+    resend an edited message. Refused while an approval is pending: that action must be decided first."""
+    if not await db.select("conversations", {"id": conversation_id, "user_id": user.id}):
+        raise HTTPException(404, "conversation not found")
+    for a in await db.select("approvals", {"user_id": user.id, "status": "pending"}):
+        if (a.get("preview") or {}).get("conversation_id") == conversation_id:
+            raise HTTPException(409, "Approve or reject the pending action first.")
+    rows = await db.select("messages", {"conversation_id": conversation_id, "user_id": user.id}, order="seq.asc")
+    users = [i for i, r in enumerate(rows) if r["role"] == "user"]
+    if body.user_index >= len(users):
+        raise HTTPException(404, "message not found")
+    start = users[body.user_index]
+    text = rows[start].get("content") or ""
+    for r in rows[start:]:
+        await db.delete("messages", {"id": r["id"], "user_id": user.id})
+    return {"ok": True, "text": text, "removed": len(rows) - start}

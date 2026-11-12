@@ -1,169 +1,52 @@
 "use client";
 
-import { useState } from "react";
-import { ProviderSetupPanel } from "@/components/ProviderSetupPanel";
-import { cardState, scopeLabel, timeAgo, type CardState, type Connection, type Connector } from "@/lib/connections";
+import { BrandLogo } from "@/components/ui/BrandLogo";
+import { Badge, Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { CARD_BADGE, cardState, type Connection, type Connector } from "@/lib/connections";
 
 type Props = {
   connector: Connector;
   connections: Connection[];
-  busy: boolean;
-  onConnect: (connector: Connector) => void;
-  onDisconnect: (connection: Connection) => void;
-  onToggleAutoApprove: (connection: Connection, value: boolean) => void;
-  onTest?: (connection: Connection) => void;
-  onSetupChanged: () => void;
+  /** Opens the step-by-step dialog for this app. */
+  onOpen: (connector: Connector) => void;
 };
 
-const BADGE: Record<CardState, { text: string; cls: string }> = {
-  not_set_up: { text: "Not set up", cls: "bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300" },
-  ready: { text: "Ready to connect", cls: "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-200" },
-  partial: { text: "Partial access", cls: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" },
-  connected: { text: "Connected", cls: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200" },
-  needs_reconnect: { text: "Needs reconnect", cls: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200" },
-};
-
-export function ConnectionCard({
-  connector, connections, busy, onConnect, onDisconnect, onToggleAutoApprove, onTest, onSetupChanged,
-}: Props) {
-  const [confirming, setConfirming] = useState<string | null>(null);
+/** One app in the integrations grid: logo, status, what it does, and the one button that matches its state. */
+export function ConnectionCard({ connector, connections, onOpen }: Props) {
   const state = cardState(connector, connections);
-  const [setupOpen, setSetupOpen] = useState(false);
+  const badge = CARD_BADGE[state];
   const headingId = `conn-${connector.id}`;
-  const badge = BADGE[state];
-  const { setup } = connector;
-
-  const connectLabel = state === "needs_reconnect" || state === "partial" ? "Reconnect"
-    : state === "connected" ? "Connect another account" : "Connect";
+  const action =
+    state === "not_set_up" ? "Set up"
+      : state === "ready" ? "Connect"
+        : state === "connected" ? "Manage" : "Reconnect";
+  const accounts = connections.length;
 
   return (
-    <article aria-labelledby={headingId}
-      className="flex flex-col gap-3 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
-      <div className="flex items-start gap-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={connector.icon} alt="" width={40} height={40} className="h-10 w-10 shrink-0" />
+    <Card className="flex h-full flex-col gap-4 p-5 transition-colors hover:border-line-strong">
+      <article aria-labelledby={headingId} className="flex flex-1 flex-col gap-4">
+        <div className="flex items-start justify-between gap-3">
+          <span className="flex size-11 items-center justify-center rounded-xl border border-line bg-surface">
+            <BrandLogo id={connector.id} name={connector.name} size={24} />
+          </span>
+          <Badge tone={badge.tone}>{badge.text}</Badge>
+        </div>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 id={headingId} className="font-medium">{connector.name}</h2>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge.cls}`}>{badge.text}</span>
-          </div>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{connector.description}</p>
-          {setup.source === "user" && setup.client_id_masked && (
-            <p className="mt-1 text-xs text-neutral-500">Your app: <code>{setup.client_id_masked}</code></p>
-          )}
-          {setup.source === "platform" && (
-            <p className="mt-1 text-xs text-neutral-500">Using this server&apos;s default app</p>
+          <h2 id={headingId} className="font-medium">{connector.name}</h2>
+          <p className="mt-1 line-clamp-3 text-sm text-muted">{connector.description}</p>
+          {accounts > 0 && (
+            <p className="mt-2 text-xs text-muted">
+              {accounts} {accounts === 1 ? "account" : "accounts"}
+              {connections[0].account_label ? ` · ${connections[0].account_label}` : ""}
+            </p>
           )}
         </div>
-      </div>
-
-      {connections.length > 0 && (
-        <ul className="space-y-2">
-          {connections.map((c) => (
-            <li key={c.id} className="rounded-lg bg-neutral-50 p-3 text-sm dark:bg-neutral-900">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="truncate font-medium">{c.account_label ?? "Account"}</span>
-                {confirming === c.id ? (
-                  <span className="flex gap-2">
-                    <button type="button" disabled={busy}
-                      onClick={() => { setConfirming(null); onDisconnect(c); }}
-                      className="rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white disabled:opacity-50">
-                      Confirm disconnect
-                    </button>
-                    <button type="button" onClick={() => setConfirming(null)} className="text-xs underline">Cancel</button>
-                  </span>
-                ) : (
-                  <button type="button" disabled={busy} onClick={() => setConfirming(c.id)}
-                    className="text-xs text-red-700 underline disabled:opacity-50 dark:text-red-400">
-                    Disconnect
-                  </button>
-                )}
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                {onTest && (
-                  <button type="button" disabled={busy} onClick={() => onTest(c)}
-                    aria-label={`Test connection ${c.account_label ?? connector.name}`}
-                    className="rounded-md border border-neutral-300 px-2 py-1 font-medium disabled:opacity-50 dark:border-neutral-700">
-                    Test connection
-                  </button>
-                )}
-                <span aria-live="polite" className="text-neutral-600 dark:text-neutral-400">
-                  {c.last_checked_at ? (
-                    <>
-                      <strong className={c.last_check_ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}>
-                        {c.last_check_ok ? "Passed" : "Failed"}
-                      </strong>{" "}
-                      · checked {timeAgo(c.last_checked_at)}
-                    </>
-                  ) : "Not tested yet"}
-                </span>
-              </div>
-              {c.last_checked_at && c.last_check_message && (
-                <p className={`mt-1 text-xs ${c.last_check_ok ? "text-neutral-600 dark:text-neutral-400" : "text-red-700 dark:text-red-400"}`}>
-                  {c.last_check_message}
-                </p>
-              )}
-              {c.partial && (
-                <p role="alert" className="mt-2 rounded-md bg-amber-50 p-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
-                  {connector.auth_type === "oauth2" ? "The provider" : "This app"} did not grant:{" "}
-                  {(c.missing_scopes ?? []).map(scopeLabel).join(", ")}. Reconnect {connector.name} and tick the{" "}
-                  {connector.name.replace(/^Google /, "")} permission on the consent screen.
-                </p>
-              )}
-              {c.scopes.length > 0 && (
-                <details className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">
-                  <summary className="cursor-pointer">Granted permissions ({c.scopes.length})</summary>
-                  <ul className="mt-1 list-disc pl-4">
-                    {c.scopes.map((s) => <li key={s}>{scopeLabel(s)}</li>)}
-                  </ul>
-                </details>
-              )}
-              <label className="mt-2 flex items-center gap-2">
-                <input type="checkbox" checked={c.auto_approve_writes} disabled={busy}
-                  onChange={(e) => onToggleAutoApprove(c, e.target.checked)} />
-                <span>Auto-approve writes</span>
-              </label>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {setupOpen && (
-        <ProviderSetupPanel
-          connector={connector}
-          onSaved={onSetupChanged}
-          onRemoved={() => { setSetupOpen(false); onSetupChanged(); }}
-          onClose={() => setSetupOpen(false)}
-        />
-      )}
-
-      <div className="mt-auto flex flex-wrap items-center gap-3">
-        {state === "not_set_up" ? (
-          !setupOpen && (
-            <button type="button" onClick={() => setSetupOpen(true)}
-              className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white dark:bg-white dark:text-neutral-900">
-              Set up
-            </button>
-          )
-        ) : (
-          <>
-            <button type="button" disabled={busy} onClick={() => onConnect(connector)}
-              className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900">
-              {connectLabel}
-            </button>
-            {!setupOpen && (
-              <button type="button" onClick={() => setSetupOpen(true)} className="text-sm underline">
-                {setup.source === "user" ? "Edit setup" : "Use my own app"}
-              </button>
-            )}
-          </>
-        )}
-        {connector.setup_url && connections.length > 0 && (
-          <a href={connector.setup_url} target="_blank" rel="noreferrer" className="text-sm underline">
-            Choose repositories
-          </a>
-        )}
-      </div>
-    </article>
+        <Button variant={state === "connected" ? "secondary" : "primary"} className="w-full"
+          onClick={() => onOpen(connector)} aria-label={`${action} ${connector.name}`}>
+          {action}
+        </Button>
+      </article>
+    </Card>
   );
 }

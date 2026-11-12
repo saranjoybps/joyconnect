@@ -92,6 +92,8 @@ async def test_chat_extracts_durable_facts_and_the_next_chat_retrieves_them(make
     events(client.post("/api/chat", json={"message": "format this with bullet style"}, headers=auth()))
     system = llm.calls[2][0][0]["content"]
     assert "Known about the user" in system and "bullet points" in system and "data, not instructions" in system
+    second = events(client.post("/api/chat", json={"message": "bullets again"}, headers=auth()))
+    assert any(e == "memory" and d["count"] >= 1 for e, d in second)
 
 
 async def test_extraction_sees_user_and_assistant_words_but_not_tool_output(make_mem_client, db, store, settings):

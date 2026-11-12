@@ -1,7 +1,7 @@
 # MEMORY.md — project context for future sessions
 
 Keep under 150 lines. Update before finishing every session (state, decisions, issues, next steps).
-Last updated: 2026-11-12, after load options / resource locators.
+Last updated: 2026-11-12, after the UI redesign.
 
 ## 1. What we are building
 A **chat-first workflow platform**: connectors become nodes; users build workflows by chat or by drag and drop
@@ -79,3 +79,18 @@ cd C:\connect\joyconnect\apps\web ; npx vitest run ; npm run typecheck
 ```
 Env lives in git-ignored root `.env`, `apps/api/.env.local`, `apps/web/.env.local`.
 Docs: CLAUDE.md (design + rules), docs/decisions.md, README.md (setup, provider apps).
+
+## UI redesign (2026-11-12)
+- Monochrome design system in `apps/web/components/ui/` (tokens in `globals.css`, class-based dark mode via
+  `<html class="dark">` + inline init script; Button, Field, Card/Badge/Skeleton/EmptyState/PageHeader, Modal
+  (focus trap, `alert` = alertdialog), Toast, icons, `BrandLogo`). Colour only for status (ok/warn/bad tokens).
+- App shell `components/shell/` (collapsible sidebar, chat history grouped by date, search, rename/delete, theme
+  toggle, user menu, mobile drawer). Sidebar and ChatWindow talk through `lib/chatBus.ts` events and `?c=<id>`.
+- Chat: stop button (AbortController), tool timeline cards (input/output/duration), memory event ("Memory used" ->
+  /memory), regenerate and edit-and-resend via `POST /api/conversations/{id}/rewind {user_index}`, rename via
+  `PATCH /api/conversations/{id}`. SSE `tool_call.input`, `tool_result.output/duration_ms`, new `memory` event.
+- Connections: card grid + category filters + 4-step modal (`components/connections/ConnectModal.tsx`).
+- Logos: `simple-icons`; Slack and Google Contacts are not in the package, so they use a monogram fallback.
+- New `/settings` page; Memory/Workflows/Login restyled. Runs and canvas panels keep legacy neutral classes (they
+  follow dark mode but are not fully restyled yet).
+- Tests: API 621+ passed; web 168 passed; `next build` passes.

@@ -193,7 +193,7 @@ function Editor({ id }: { id: string }) {
   const node = workflow.nodes.find((n) => n.id === selected) ?? null;
 
   return (
-    <div className="relative left-1/2 -my-6 flex h-[calc(100dvh-3.25rem)] w-screen -translate-x-1/2 flex-col">
+    <div className="flex h-[calc(100dvh-3.5rem)] w-full flex-col md:h-dvh">
       <div className="flex flex-wrap items-center gap-3 border-b border-neutral-200 px-3 py-2 dark:border-neutral-800">
         <Link href="/workflows" className="text-sm underline">← Workflows</Link>
         <label className="sr-only" htmlFor="wf-title">Workflow name</label>

@@ -37,7 +37,12 @@ export type Action = {
 export type ChatItem =
   | { kind: "user"; text: string }
   | { kind: "assistant"; text: string }
-  | { kind: "tool"; id: string; tool: string; label: string; status: "running" | "ok" | "error"; summary?: string | null; action?: Action | null }
+  | {
+    kind: "tool"; id: string; tool: string; label: string; status: "running" | "ok" | "error";
+    summary?: string | null; action?: Action | null;
+    connector?: string; input?: Record<string, unknown> | null; output?: string | null; duration_ms?: number | null;
+  }
+  | { kind: "memory"; count: number }
   | { kind: "approval"; approval: ApprovalPreview; state: "pending" | "submitting" | "approved" | "rejected" }
   | { kind: "error"; text: string };
 
@@ -86,21 +91,27 @@ export function applyEvent(items: ChatItem[], ev: SseEvent): ChatItem[] {
         kind: "tool", id: String(d.id), tool: String(d.tool),
         label: `${d.connector_name ?? ""} · ${d.label ?? labelFor(String(d.tool))}`.replace(/^ · /, ""),
         status: "running",
+        connector: d.connector ? String(d.connector) : undefined,
+        input: (d.input as Record<string, unknown> | undefined) ?? null,
       }];
     case "tool_result": {
       const idx = items.findIndex((i) => i.kind === "tool" && i.id === d.id);
       const status = d.ok ? "ok" : "error";
       const summary = d.ok ? null : String(d.summary ?? "");
       const action = (d.action as Action | null | undefined) ?? null;
+      const output = typeof d.output === "string" ? d.output : null;
+      const duration_ms = typeof d.duration_ms === "number" ? d.duration_ms : null;
       if (idx === -1) {
-        return [...items, { kind: "tool", id: String(d.id), tool: String(d.tool), label: labelFor(String(d.tool)), status, summary, action }];
+        return [...items, { kind: "tool", id: String(d.id), tool: String(d.tool), label: labelFor(String(d.tool)), status, summary, action, output, duration_ms }];
       }
       const next = [...items];
-      next[idx] = { ...(next[idx] as Extract<ChatItem, { kind: "tool" }>), status, summary, action };
+      next[idx] = { ...(next[idx] as Extract<ChatItem, { kind: "tool" }>), status, summary, action, output, duration_ms };
       return next;
     }
     case "approval_required":
       return [...items, { kind: "approval", approval: d as unknown as ApprovalPreview, state: "pending" }];
+    case "memory":
+      return [...items, { kind: "memory", count: Number(d.count ?? 0) }];
     case "error":
       return [...items, { kind: "error", text: String(d.message ?? "Something went wrong.") }];
     default:
@@ -113,12 +124,13 @@ async function token(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-async function* streamPost(path: string, body: unknown): AsyncGenerator<SseEvent> {
+async function* streamPost(path: string, body: unknown, signal?: AbortSignal): AsyncGenerator<SseEvent> {
   const t = await token();
   const resp = await fetch(`${env.apiBaseUrl}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...(t ? { Authorization: `Bearer ${t}` } : {}) },
     body: JSON.stringify(body),
+    signal,
   });
   if (!resp.ok || !resp.body) {
     let detail = resp.statusText;
@@ -138,8 +150,15 @@ export const chatApi = {
   conversation: (id: string) => apiFetch<ConversationDetail>(`/api/conversations/${id}`),
   remove: (id: string) => apiFetch<{ ok: boolean }>(`/api/conversations/${id}`, { method: "DELETE" }),
   modes: () => apiFetch<ChatMode[]>("/api/chat/modes"),
-  send: (message: string, conversationId: string | null, mode: string | null = null) =>
-    streamPost("/api/chat", { message, conversation_id: conversationId, mode }),
-  decide: (approvalId: string, approve: boolean) =>
-    streamPost(`/api/approvals/${approvalId}/decision`, { approve }),
+  rename: (id: string, title: string) =>
+    apiFetch<{ id: string; title: string }>(`/api/conversations/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
+  /** Drops the n-th user message and everything after it; returns that message's text. */
+  rewind: (id: string, userIndex: number) =>
+    apiFetch<{ ok: boolean; text: string; removed: number }>(`/api/conversations/${id}/rewind`, {
+      method: "POST", body: JSON.stringify({ user_index: userIndex }),
+    }),
+  send: (message: string, conversationId: string | null, mode: string | null = null, signal?: AbortSignal) =>
+    streamPost("/api/chat", { message, conversation_id: conversationId, mode }, signal),
+  decide: (approvalId: string, approve: boolean, signal?: AbortSignal) =>
+    streamPost(`/api/approvals/${approvalId}/decision`, { approve }, signal),
 };

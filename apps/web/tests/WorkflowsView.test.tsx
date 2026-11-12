@@ -6,7 +6,6 @@ const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/workflows" }));
 vi.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: vi.fn() }));
 
-import { AppNav } from "@/components/AppNav";
 import { WorkflowsView } from "@/components/WorkflowsView";
 import { workflowsApi, type WorkflowSummary } from "@/lib/workflows";
 
@@ -17,15 +16,6 @@ const wf = (over: Partial<WorkflowSummary> = {}): WorkflowSummary => ({
 afterEach(() => {
   vi.restoreAllMocks();
   push.mockClear();
-});
-
-describe("top nav", () => {
-  it("lists Chat, Connections, Workflows, Runs, Memory in that order", () => {
-    render(<AppNav />);
-    const names = screen.getAllByRole("link").map((a) => a.textContent);
-    expect(names).toEqual(["Chat", "Connections", "Workflows", "Runs", "Memory"]);
-    expect(screen.getByRole("link", { name: "Workflows" })).toHaveAttribute("aria-current", "page");
-  });
 });
 
 describe("WorkflowsView", () => {
