@@ -102,6 +102,7 @@ MANIFEST = google_manifest(
                 "Cannot see the rest of your Drive.",
     scopes=[FILE_SCOPE],
     api_to_enable="Google Drive API",
+    health_tool="google_drive__list_files", health_args={"name_contains": None, "folder_id": None, "page_size": 1},
     tools=[
         ToolDef(
             name="google_drive__create_folder",

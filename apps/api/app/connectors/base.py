@@ -33,6 +33,72 @@ class ToolError(Exception):
     """A tool failed in a way that should be reported back to the model."""
 
 
+ErrorKind = Literal["auth", "scope", "permission", "not_found", "rate_limit", "server", "invalid", "other"]
+
+
+class ProviderError(ToolError):
+    """A classified provider failure. `kind` drives retries, the Reconnect state and the wording."""
+
+    def __init__(self, message: str, kind: ErrorKind = "other", status: int | None = None,
+                 retry_after: float | None = None):
+        super().__init__(message)
+        self.kind, self.status, self.retry_after = kind, status, retry_after
+
+    @property
+    def retryable(self) -> bool:
+        return self.kind in ("rate_limit", "server")
+
+
+def classify_status(status: int, detail: str = "") -> ErrorKind:
+    if status == 401:
+        return "auth"
+    if status == 403:
+        return "scope" if "insufficient" in detail.lower() or "scope" in detail.lower() else "permission"
+    if status == 404:
+        return "not_found"
+    if status == 429:
+        return "rate_limit"
+    if status >= 500:
+        return "server"
+    if status in (400, 422):
+        return "invalid"
+    return "other"
+
+
+def provider_error(what: str, status: int, detail: str = "", retry_after: float | None = None) -> ProviderError:
+    """Plain-words message for each error class. Always contains 'failed (<status>)' except rate limits."""
+    kind = classify_status(status, detail)
+    extra = f" Provider said: {detail}" if detail else ""
+    if kind == "auth":
+        msg = (f"{what} failed ({status}): the provider rejected the credentials. "
+               f"Reconnect this app on the Connections page.{extra}")
+    elif kind == "scope":
+        msg = (f"{what} failed ({status}): the connection is missing a permission this needs. "
+               f"Reconnect the app and grant every permission.{extra}")
+    elif kind == "permission":
+        msg = (f"{what} failed ({status}): the connected account is not allowed to do this "
+               f"(check sharing or role).{extra}")
+    elif kind == "not_found":
+        msg = f"{what} failed ({status}): not found. Check the id or name, and that it is shared with the app.{extra}"
+    elif kind == "rate_limit":
+        wait = f" in {int(retry_after)} seconds" if retry_after else " in a minute"
+        msg = f"{what} was rate limited by the provider (429). Try again{wait}."
+    elif kind == "server":
+        msg = f"{what} failed ({status}): the provider is having trouble right now. Try again shortly.{extra}"
+    elif kind == "invalid":
+        msg = f"{what} failed ({status}): the provider did not accept the request.{extra}"
+    else:
+        msg = f"{what} failed ({status}).{extra}"
+    return ProviderError(msg, kind, status, retry_after)
+
+
+def _retry_after(resp: "httpx.Response") -> float | None:
+    try:
+        return float(resp.headers.get("Retry-After", ""))
+    except ValueError:
+        return None
+
+
 class TokenSet(BaseModel):
     access_token: str
     refresh_token: str | None = None
@@ -215,6 +281,11 @@ class ConnectorManifest(BaseModel):
     account_label: AccountLabel | None = None
     revoke: Revoke | None = None
     validate_credentials: ValidateCredentials | None = None
+    # Health check ("Test connection"): one cheap read-only call. Either an existing read tool with fixed
+    # args, or a custom handler (ctx) -> JSON for providers with no cheap read tool.
+    health_tool: str | None = None
+    health_args: dict[str, Any] = Field(default_factory=dict)
+    health: Callable[..., Awaitable[Any]] | None = None
 
     def functional_scopes(self) -> list[str]:
         """Requested scopes that tools need (everything except identity scopes)."""
@@ -308,12 +379,9 @@ def raise_for_status(resp: httpx.Response, what: str) -> None:
         detail = ""
         try:
             body = resp.json()
-            detail = (body.get("error") or {}).get("message") if isinstance(body.get("error"), dict) else (
-                body.get("message") or body.get("error") or "")
+            err = body.get("error")
+            detail = (err.get("message") if isinstance(err, dict) else None) or body.get("message") or (
+                err if isinstance(err, str) else "") or ""
         except Exception:  # noqa: BLE001
             pass
-        if resp.status_code == 429:
-            wait = resp.headers.get("Retry-After")
-            raise ToolError(f"{what} was rate limited by the provider (429). "
-                            f"Try again{' in ' + wait + ' seconds' if wait else ' in a minute'}.")
-        raise ToolError(f"{what} failed ({resp.status_code}){': ' + str(detail) if detail else ''}")
+        raise provider_error(what, resp.status_code, str(detail)[:300], _retry_after(resp))

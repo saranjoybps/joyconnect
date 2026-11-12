@@ -66,7 +66,23 @@ export type Connection = {
   /** Permissions the connector needs that the provider did not grant (user unticked them). */
   missing_scopes?: string[];
   partial?: boolean;
+  /** Result of the last "Test connection" (no LLM involved). */
+  last_checked_at?: string | null;
+  last_check_ok?: boolean | null;
+  last_check_message?: string | null;
 };
+
+export type HealthResult = { ok: boolean; message: string; checked_at: string; connection: Connection };
+
+/** "just now", "5 min ago", or a date: for the last-checked line on a card. */
+export function timeAgo(iso: string | null | undefined, now: Date = new Date()): string {
+  if (!iso) return "never";
+  const secs = Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return "just now";
+  if (secs < 3600) return `${Math.floor(secs / 60)} min ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)} h ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
 export type CardState = "not_set_up" | "ready" | "connected" | "partial" | "needs_reconnect";
 
@@ -124,6 +140,7 @@ export const connectionsApi = {
     }));
   },
   list: () => apiFetch<Connection[]>("/api/connections"),
+  test: (id: string) => apiFetch<HealthResult>(`/api/connections/${id}/test`, { method: "POST" }),
   start: (provider: string) =>
     apiFetch<StartResult>(`/api/connections/${encodeURIComponent(provider)}/start`, { method: "POST" }),
   disconnect: (id: string) => apiFetch<{ ok: boolean }>(`/api/connections/${id}/disconnect`, { method: "POST" }),

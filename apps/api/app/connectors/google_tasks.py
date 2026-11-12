@@ -71,6 +71,7 @@ MANIFEST = google_manifest(
     description="List task lists, and create, complete and delete tasks.",
     scopes=[SCOPE],
     api_to_enable="Google Tasks API",
+    health_tool="google_tasks__list_task_lists", health_args={},
     tools=[
         ToolDef(name="google_tasks__list_task_lists", description="List the user's task lists (id and title).",
                 parameters=object_schema({}), risk="read", handler=list_task_lists),

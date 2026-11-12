@@ -84,6 +84,7 @@ MANIFEST = api_key_manifest(
     setup_guide=["Open Builder hub > Personal access tokens > Create token.",
                  "Add scopes schema.bases:read, data.records:read and data.records:write.",
                  "Under Access, choose the bases this app may use, create the token and paste it here."],
+    health_tool="airtable__list_bases",
     tools=[
         ToolDef(name="airtable__list_bases", description="List the Airtable bases the token can access.",
                 parameters=object_schema({}), risk="read", handler=list_bases),

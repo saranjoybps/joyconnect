@@ -79,6 +79,7 @@ MANIFEST = api_key_manifest(
     setup_guide=["Create a Power-Up at trello.com/power-ups/admin to get an API key.",
                  "On the API key page click 'generate a Token' and allow read and write access.",
                  "Paste the key and the token here."],
+    health_tool="trello__list_boards",
     tools=[
         ToolDef(name="trello__list_boards", description="List the user's open Trello boards.",
                 parameters=object_schema({}), risk="read", handler=list_boards),

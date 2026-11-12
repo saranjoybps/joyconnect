@@ -13,6 +13,7 @@ from app.connectors.registry import all_manifests, get_manifest
 from app.core.config import Settings, get_settings
 from app.core.security import UserDep
 from app.deps import DbDep, HttpDep, StoreDep
+from app.health import run_health_check
 from app.oauth.apps import ProviderAppService
 from app.oauth.tokens import NeedsReauth, TokenService, public_view
 
@@ -125,3 +126,13 @@ async def check(connection_id: str, user: UserDep, db: DbDep, store: StoreDep, h
     except (OAuthError, ToolError) as exc:
         raise HTTPException(502, f"provider error: {exc}") from exc
     return {"status": "active"}
+
+
+@router.post("/connections/{connection_id}/test")
+async def test_connection(connection_id: str, user: UserDep, db: DbDep, store: StoreDep, http: HttpDep,
+                          settings: SettingsDep) -> dict:
+    """Health check: one cheap read-only provider call, no LLM. Stores and returns the outcome."""
+    conn = await _own(db, user.id, connection_id)
+    result = await run_health_check(db, store, http, settings, conn)
+    fresh = await _own(db, user.id, connection_id)
+    return {**result, "connection": public_view(fresh)}

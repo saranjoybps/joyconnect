@@ -10,7 +10,7 @@ import re
 
 from app.connectors._apikey import api_key_manifest, checked_get
 from app.connectors.base import (CredentialField, Settings, TokenSet, ToolContext, ToolDef, ToolError,
-                                 object_schema)
+                                 _retry_after, object_schema, provider_error)
 
 API = "https://app.asana.com/api/1.0"
 _GID_RE = re.compile(r"^[0-9]{1,30}$")
@@ -23,15 +23,12 @@ def _gid(value: str, what: str) -> str:
 
 
 def _check(resp, what: str) -> dict:
-    if resp.status_code == 429:
-        wait = resp.headers.get("Retry-After")
-        raise ToolError(f"{what} was rate limited by Asana (429). Try again in {wait or 'a minute'} seconds.")
     if resp.status_code >= 400:
         try:
             msg = resp.json()["errors"][0]["message"]
         except Exception:  # noqa: BLE001
             msg = ""
-        raise ToolError(f"{what} failed ({resp.status_code}){': ' + msg if msg else ''}")
+        raise provider_error(what, resp.status_code, msg, _retry_after(resp))
     return resp.json()
 
 
@@ -83,6 +80,7 @@ MANIFEST = api_key_manifest(
     validate=validate, console_url="https://app.asana.com/0/my-apps",
     setup_guide=["Open Asana > Settings > Apps > Manage Developer Apps > Create new token.",
                  "Copy the token (shown once) and paste it here."],
+    health_tool="asana__list_workspaces",
     tools=[
         ToolDef(name="asana__list_workspaces", description="List the user's Asana workspaces.",
                 parameters=object_schema({}), risk="read", handler=list_workspaces),

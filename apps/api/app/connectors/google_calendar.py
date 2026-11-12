@@ -117,6 +117,7 @@ MANIFEST = google_manifest(
     description="See and create events on your primary calendar.",
     scopes=[EVENTS, CALENDAR_LIST, FREEBUSY],
     api_to_enable="Google Calendar API",
+    health_tool="google_calendar__list_calendars", health_args={},
     scope_labels={EVENTS: "Calendar events", CALENDAR_LIST: "Calendar list", FREEBUSY: "Free/busy"},
     tools=[
         ToolDef(

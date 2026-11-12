@@ -17,11 +17,12 @@ from app.connectors.base import (ConnectorManifest, CredentialField, Settings, T
 
 def api_key_manifest(*, id: str, name: str, description: str, credential_fields: list[CredentialField],
                      validate: ValidateCredentials, tools: list[ToolDef], console_url: str,
-                     setup_guide: list[str]) -> ConnectorManifest:
+                     setup_guide: list[str], health_tool: str, health_args: dict | None = None) -> ConnectorManifest:
     return ConnectorManifest(
         id=id, name=name, icon=f"/icons/{id}.svg", description=description, auth_type="api_key",
         credential_fields=credential_fields, validate_credentials=validate, console_url=console_url,
-        setup_guide=setup_guide, tools=tools, pkce=False)
+        setup_guide=setup_guide, tools=tools, pkce=False,
+        health_tool=health_tool, health_args=health_args or {})
 
 
 async def checked_get(http: httpx.AsyncClient, url: str, what: str, **kw: Any) -> dict:

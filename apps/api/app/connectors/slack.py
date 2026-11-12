@@ -6,8 +6,10 @@ import httpx
 
 from app.connectors.base import (
     ConnectorManifest, OAuthError, ResolvedApp, TokenSet, ToolContext, ToolDef, ToolError,
-    default_parse_token_response, oauth_client_fields, object_schema,
+    ProviderError, _retry_after, default_parse_token_response, oauth_client_fields, object_schema, provider_error,
 )
+
+SLACK_AUTH_ERRORS = {"invalid_auth", "not_authed", "token_revoked", "token_expired", "account_inactive"}
 
 API = "https://slack.com/api"
 
@@ -39,11 +41,26 @@ async def revoke(http: httpx.AsyncClient, m: ConnectorManifest, token: TokenSet,
 
 async def _call(ctx: ToolContext, method: str, **kwargs: Any) -> dict:
     resp = await ctx.http.post(f"{API}/{method}", headers=ctx.bearer, **kwargs)
+    if resp.status_code == 429:  # Slack: HTTP 429 + Retry-After
+        raise provider_error(f"Slack {method}", 429, retry_after=_retry_after(resp))
+    if resp.status_code >= 500:
+        raise provider_error(f"Slack {method}", resp.status_code)
     data = resp.json()
     if not data.get("ok"):
         err = data.get("error", "unknown_error")
-        hint = " Invite the bot to the channel first (/invite @YourApp)." if err == "not_in_channel" else ""
-        raise ToolError(f"Slack {method} failed: {err}.{hint}")
+        if err in SLACK_AUTH_ERRORS:
+            raise ProviderError(f"Slack {method} failed ({err}): Slack rejected the bot token. "
+                                "Reconnect Slack on the Connections page.", "auth", 200)
+        if err in ("missing_scope", "no_permission", "restricted_action"):
+            raise ProviderError(f"Slack {method} failed ({err}): the app is missing a permission. Add the bot "
+                                "scope in your Slack app, then reconnect Slack.", "scope", 200)
+        if err in ("channel_not_found", "not_in_channel", "is_archived"):
+            hint = " Invite the bot to the channel first (/invite @YourApp)." if err == "not_in_channel" else ""
+            raise ProviderError(f"Slack {method} failed ({err}): channel not found or the bot is not in it.{hint}",
+                                "not_found", 200)
+        if err in ("ratelimited", "rate_limited"):
+            raise ProviderError("Slack rate limited the request (429). Try again in a minute.", "rate_limit", 429)
+        raise ToolError(f"Slack {method} failed: {err}.")
     return data
 
 
@@ -94,6 +111,7 @@ MANIFEST = ConnectorManifest(
     parse_token_response=parse_token_response,
     account_label=account_label,
     revoke=revoke,
+    health_tool="slack__list_channels", health_args={},
     tools=[
         ToolDef(
             name="slack__list_channels",

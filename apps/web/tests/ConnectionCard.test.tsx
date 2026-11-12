@@ -206,3 +206,25 @@ describe("Set up panel", () => {
     expect(h.onSetupChanged).toHaveBeenCalled();
   });
 });
+
+describe("health check UI", () => {
+  it("shows Not tested yet and a Test connection button that calls onTest", async () => {
+    const onTest = vi.fn();
+    const handlers = { onConnect: vi.fn(), onDisconnect: vi.fn(), onToggleAutoApprove: vi.fn(), onSetupChanged: vi.fn() };
+    render(<ConnectionCard connector={ready} connections={[conn()]} busy={false} onTest={onTest} {...handlers} />);
+    expect(screen.getByText("Not tested yet")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /test connection octocat/i }));
+    expect(onTest).toHaveBeenCalledWith(expect.objectContaining({ id: "c1" }));
+  });
+
+  it("shows pass/fail with the provider message and time", () => {
+    const handlers = { onConnect: vi.fn(), onDisconnect: vi.fn(), onToggleAutoApprove: vi.fn(), onSetupChanged: vi.fn() };
+    const now = new Date().toISOString();
+    render(<ConnectionCard connector={ready} connections={[conn({
+      last_checked_at: now, last_check_ok: false, last_check_message: "GitHub failed (401): the provider rejected the credentials.",
+    })]} busy={false} onTest={vi.fn()} {...handlers} />);
+    expect(screen.getByText("Failed")).toBeInTheDocument();
+    expect(screen.getByText(/checked just now/i)).toBeInTheDocument();
+    expect(screen.getByText(/rejected the credentials/i)).toBeInTheDocument();
+  });
+});

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
-from app.connectors.base import ConnectorManifest, ToolContext, ToolDef, ToolError, missing_scopes
+from app.connectors.base import (ConnectorManifest, OAuthError, ProviderError, ToolContext, ToolDef, ToolError,
+                                 missing_scopes)
 from app.connectors.registry import get_manifest
 from app.core.config import Settings
 from app.core.secrets import SecretStore
@@ -132,11 +134,21 @@ def log_scope_mismatch(bound: BoundTool) -> None:
 
 class ToolExecutor:
     def __init__(self, db: Database, store: SecretStore, http: httpx.AsyncClient, settings: Settings):
+        self.db = db
         self.tokens = TokenService(db, store, http, settings)
         self.http, self.settings = http, settings
 
     async def execute(self, bound: BoundTool, args: dict[str, Any]) -> tuple[bool, Any]:
         """Returns (ok, JSON-serializable result). Never raises for provider errors."""
+        ok, result, _ms = await self.execute_timed(bound, args)
+        return ok, result
+
+    async def execute_timed(self, bound: BoundTool, args: dict[str, Any]) -> tuple[bool, Any, int]:
+        started = time.monotonic()
+        ok, result = await self._run(bound, args)
+        return ok, result, int((time.monotonic() - started) * 1000)
+
+    async def _run(self, bound: BoundTool, args: dict[str, Any]) -> tuple[bool, Any]:
         name = bound.manifest.name
         if bound.missing:
             # Never call the provider with a token we know lacks the scope (it would be a raw 403).
@@ -146,17 +158,26 @@ class ToolExecutor:
             token = await self.tokens.get_token(bound.connection)
             ctx = ToolContext(http=self.http, token=token, settings=self.settings, connection=bound.connection)
             return True, await bound.tool.handler(ctx, **args)
-        except ToolError as exc:
-            if "(403)" in str(exc) and "insufficient" in str(exc).lower():
+        except ProviderError as exc:
+            if exc.kind == "scope" and bound.manifest.verifies_scopes:
                 # The token claimed the scope but Google refused (stale record, revoked grant...).
                 log_scope_mismatch(bound)   # diagnostics only: ids and scope names, never tokens
                 return False, {"error": bound.scope_error()}
+            if exc.kind == "auth":
+                # The provider no longer accepts this credential: show Reconnect on the card.
+                await self.tokens.mark(bound.connection["id"], "needs_reauth")
+            return False, {"error": str(exc), "kind": exc.kind}
+        except ToolError as exc:
             return False, {"error": str(exc)}
         except NeedsReauth:
-            return False, {"error": f"{name} needs to be reconnected on the Connections page."}
+            return False, {"error": f"{name} needs to be reconnected on the Connections page.", "kind": "auth"}
+        except OAuthError as exc:
+            log.warning("token refresh failed for %s: %s", bound.manifest.id, exc.code)
+            return False, {"error": f"Could not refresh the {name} connection ({exc.code}). "
+                                    "Try again shortly, or reconnect it on the Connections page.", "kind": "auth"}
         except httpx.HTTPError as exc:
             log.warning("network error calling %s: %s", bound.tool.name, type(exc).__name__)
-            return False, {"error": f"Could not reach {name}. Try again shortly."}
+            return False, {"error": f"Could not reach {name}. Try again shortly.", "kind": "server"}
         except Exception as exc:  # noqa: BLE001 — report, never crash the loop
             log.exception("tool %s failed: %s", bound.tool.name, type(exc).__name__)
             return False, {"error": f"{name} returned an unexpected error."}

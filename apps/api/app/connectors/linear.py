@@ -10,8 +10,8 @@ from __future__ import annotations
 from typing import Any
 
 from app.connectors._apikey import api_key_manifest
-from app.connectors.base import (CredentialField, Settings, TokenSet, ToolContext, ToolDef, ToolError,
-                                 object_schema, raise_for_status)
+from app.connectors.base import (CredentialField, ProviderError, Settings, TokenSet, ToolContext, ToolDef,
+                                 ToolError, object_schema, provider_error, raise_for_status)
 
 API = "https://api.linear.app/graphql"
 
@@ -19,8 +19,6 @@ API = "https://api.linear.app/graphql"
 async def gql(http, key: str, query: str, variables: dict | None = None) -> dict[str, Any]:
     resp = await http.post(API, json={"query": query, "variables": variables or {}},
                            headers={"Authorization": key, "Content-Type": "application/json"})
-    if resp.status_code in (401, 403):
-        raise ToolError(f"Linear rejected the API key ({resp.status_code}).")
     if resp.status_code != 400:
         raise_for_status(resp, "Linear request")
     body = resp.json()
@@ -28,7 +26,11 @@ async def gql(http, key: str, query: str, variables: dict | None = None) -> dict
         err = body["errors"][0]
         code = (err.get("extensions") or {}).get("code")
         if code == "RATELIMITED":
-            raise ToolError("Linear rate limited the request. Try again in a minute.")
+            raise ProviderError("Linear rate limited the request (429). Try again in a minute.", "rate_limit", 429)
+        if code in ("AUTHENTICATION_ERROR", "UNAUTHENTICATED"):
+            raise provider_error("Linear request", 401)
+        if code in ("FORBIDDEN",):
+            raise provider_error("Linear request", 403, err.get("message", ""))
         raise ToolError(f"Linear error: {err.get('message', 'request failed')}")
     return body["data"]
 
@@ -76,6 +78,7 @@ MANIFEST = api_key_manifest(
     validate=validate, console_url="https://linear.app/settings/account/security",
     setup_guide=["Open Linear > Settings > Security & access > Personal API keys.",
                  "Create a key (read and create access is enough) and paste it here."],
+    health_tool="linear__list_teams",
     tools=[
         ToolDef(name="linear__list_teams", description="List Linear teams (id, key, name). Needed to create issues.",
                 parameters=object_schema({}), risk="read", handler=list_teams),

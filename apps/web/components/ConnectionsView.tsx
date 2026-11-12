@@ -108,6 +108,7 @@ export function ConnectionsView() {
             onConnect={connect}
             onDisconnect={(conn) => run(() => connectionsApi.disconnect(conn.id))}
             onToggleAutoApprove={(conn, v) => run(() => connectionsApi.setAutoApprove(conn.id, v))}
+            onTest={(conn) => run(() => connectionsApi.test(conn.id))}
             onSetupChanged={() => setReloadKey((k) => k + 1)}
           />
         ))}

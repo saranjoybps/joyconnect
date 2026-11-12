@@ -124,6 +124,7 @@ MANIFEST = ConnectorManifest(
     setup_url="https://github.com/apps/{app_slug}/installations/new",
     account_label=account_label,
     revoke=revoke,
+    health_tool="github__list_repos", health_args={},
     tools=[
         ToolDef(
             name="github__list_repos",

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ProviderSetupPanel } from "@/components/ProviderSetupPanel";
-import { cardState, scopeLabel, type CardState, type Connection, type Connector } from "@/lib/connections";
+import { cardState, scopeLabel, timeAgo, type CardState, type Connection, type Connector } from "@/lib/connections";
 
 type Props = {
   connector: Connector;
@@ -11,6 +11,7 @@ type Props = {
   onConnect: (connector: Connector) => void;
   onDisconnect: (connection: Connection) => void;
   onToggleAutoApprove: (connection: Connection, value: boolean) => void;
+  onTest?: (connection: Connection) => void;
   onSetupChanged: () => void;
 };
 
@@ -23,7 +24,7 @@ const BADGE: Record<CardState, { text: string; cls: string }> = {
 };
 
 export function ConnectionCard({
-  connector, connections, busy, onConnect, onDisconnect, onToggleAutoApprove, onSetupChanged,
+  connector, connections, busy, onConnect, onDisconnect, onToggleAutoApprove, onTest, onSetupChanged,
 }: Props) {
   const [confirming, setConfirming] = useState<string | null>(null);
   const state = cardState(connector, connections);
@@ -78,6 +79,30 @@ export function ConnectionCard({
                   </button>
                 )}
               </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                {onTest && (
+                  <button type="button" disabled={busy} onClick={() => onTest(c)}
+                    aria-label={`Test connection ${c.account_label ?? connector.name}`}
+                    className="rounded-md border border-neutral-300 px-2 py-1 font-medium disabled:opacity-50 dark:border-neutral-700">
+                    Test connection
+                  </button>
+                )}
+                <span aria-live="polite" className="text-neutral-600 dark:text-neutral-400">
+                  {c.last_checked_at ? (
+                    <>
+                      <strong className={c.last_check_ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}>
+                        {c.last_check_ok ? "Passed" : "Failed"}
+                      </strong>{" "}
+                      · checked {timeAgo(c.last_checked_at)}
+                    </>
+                  ) : "Not tested yet"}
+                </span>
+              </div>
+              {c.last_checked_at && c.last_check_message && (
+                <p className={`mt-1 text-xs ${c.last_check_ok ? "text-neutral-600 dark:text-neutral-400" : "text-red-700 dark:text-red-400"}`}>
+                  {c.last_check_message}
+                </p>
+              )}
               {c.partial && (
                 <p role="alert" className="mt-2 rounded-md bg-amber-50 p-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
                   {connector.auth_type === "oauth2" ? "The provider" : "This app"} did not grant:{" "}

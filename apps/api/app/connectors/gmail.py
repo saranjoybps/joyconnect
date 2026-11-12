@@ -78,6 +78,7 @@ MANIFEST = google_manifest(
     description="Send email from your account and list your labels. Cannot read your mail.",
     scopes=[SEND, LABELS],
     api_to_enable="Gmail API",
+    health_tool="gmail__list_labels", health_args={},
     scope_labels={SEND: "Send email", LABELS: "Gmail labels"},
     tools=[
         ToolDef(

@@ -8,7 +8,8 @@ import re
 
 import httpx
 
-from app.connectors.base import ConnectorManifest, ResolvedApp, TokenSet, ToolDef, oauth_client_fields
+from app.connectors.base import (ConnectorManifest, ResolvedApp, TokenSet, ToolDef, oauth_client_fields,
+                                 raise_for_status)
 
 AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -57,9 +58,20 @@ SETUP_GUIDE = [
 ]
 
 
+async def google_token_check(ctx) -> dict:
+    """Health check for services with no cheap read tool: Google's userinfo endpoint accepts the access
+    token (identity scopes are always granted), which proves the token and refresh path work."""
+    resp = await ctx.http.get("https://openidconnect.googleapis.com/v1/userinfo", headers=ctx.bearer)
+    raise_for_status(resp, "Checking the Google token")
+    return {"account": resp.json().get("email")}
+
+
 def google_manifest(*, id: str, name: str, description: str, scopes: list[str], tools: list[ToolDef],
-                    api_to_enable: str, scope_labels: dict[str, str] | None = None) -> ConnectorManifest:
+                    api_to_enable: str, scope_labels: dict[str, str] | None = None,
+                    health_tool: str | None = None, health_args: dict | None = None) -> ConnectorManifest:
     return ConnectorManifest(
+        health_tool=health_tool, health_args=health_args or {},
+        health=None if health_tool else google_token_check,
         id=id,
         name=name,
         icon=f"/icons/{id}.svg",

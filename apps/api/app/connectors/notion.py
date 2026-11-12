@@ -173,6 +173,7 @@ MANIFEST = ConnectorManifest(
     parse_token_response=parse_token_response,
     account_label=account_label,
     revoke=revoke,
+    health_tool="notion__search", health_args={"query": ""},
     tools=[
         ToolDef(
             name="notion__search",

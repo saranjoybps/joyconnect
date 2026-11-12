@@ -22,7 +22,8 @@ log = logging.getLogger(__name__)
 REFRESH_LEEWAY_SECONDS = 60
 
 PUBLIC_FIELDS = ("id", "provider", "status", "account_label", "scopes", "expires_at",
-                 "auto_approve_writes", "created_at", "provider_app_id")
+                 "auto_approve_writes", "created_at", "provider_app_id",
+                 "last_checked_at", "last_check_ok", "last_check_message")
 
 
 class NeedsReauth(Exception):

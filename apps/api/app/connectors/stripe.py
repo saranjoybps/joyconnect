@@ -81,6 +81,7 @@ MANIFEST = api_key_manifest(
     setup_guide=["Open Dashboard > Developers > API keys > Create restricted key.",
                  "Set only Balance, Customers and Invoices to Read; leave everything else None.",
                  "Prefer test mode while trying this out. Paste the key here."],
+    health_tool="stripe__get_balance",
     tools=[
         ToolDef(name="stripe__get_balance", description="Get the Stripe account balance (available and pending).",
                 parameters=object_schema({}), risk="read", handler=get_balance),

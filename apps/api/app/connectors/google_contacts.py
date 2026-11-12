@@ -61,6 +61,7 @@ MANIFEST = google_manifest(
     description="List, search and create contacts.",
     scopes=[SCOPE],
     api_to_enable="People API",
+    health_tool="google_contacts__list_contacts", health_args={"page_size": 1},
     tools=[
         ToolDef(name="google_contacts__list_contacts", description="List the user's contacts (name, emails, phones).",
                 parameters=object_schema({"page_size": {"type": "integer", "description": "1 to 200."}}),
