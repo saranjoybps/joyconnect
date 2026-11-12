@@ -7,6 +7,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 const LINKS = [
   { href: "/chat", label: "Chat" },
   { href: "/connections", label: "Connections" },
+  { href: "/runs", label: "Runs" },
 ];
 
 export function AppNav() {
