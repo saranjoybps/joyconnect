@@ -1,7 +1,7 @@
 # MEMORY.md — project context for future sessions
 
 Keep under 150 lines. Update before finishing every session (state, decisions, issues, next steps).
-Last updated: 2026-11-12, after the minimal-design migration.
+Last updated: 2026-11-12, after the minimal-design migration, migration 0008 and push (c4e94cf).
 
 ## 1. What we are building
 A **chat-first workflow platform**: connectors become nodes; users build workflows by chat or by drag and drop
@@ -52,8 +52,9 @@ Revision plan (CLAUDE.md section 5): workflow engine in steps 1-7 below. Progres
 - [x] Discovery + agent quality (2026-11-12): search/list tools for every connector, drive.metadata.readonly (RESTRICTED scope,
   owner asked), prompt FIND-DON'T-ASK, Reject stops the task, memory (short-term summary + pgvector long-term + Memory page),
   guardrails (injection taint, schema validation, caps, daily token limit, final-answer check, PII log redaction),
-  parallel read calls. All tests use mocked LLM/embedder. **Migration 0008 must be applied by the owner**
-  (`cd apps/api; .venv\Scripts\python.exe scripts\apply_migrations.py`); until then memory/usage degrade silently.
+  parallel read calls. All tests use mocked LLM/embedder. **Migration 0008 APPLIED 2026-11-12**
+  (tables `memories`, `user_settings`, `llm_usage`, extension `vector`; the owner asked the agent to run
+  `scripts/apply_migrations.py`, which skips already-applied files). Memory page works after an API restart.
   Existing Google connections show Partial access until reconnected (new scope); Slack needs `users:read`.
 - [x] Load options (2026-11-12): connector `loaders` + `param_ui` (x-ui), `POST /api/nodes/{type}/options` (60 s cache, refresh),
   canvas: account, Resource, Operation, then dropdown / resource locator (list, URL, ID) / multi-select / tab range / column mapper;
@@ -63,10 +64,17 @@ Revision plan (CLAUDE.md section 5): workflow engine in steps 1-7 below. Progres
   Not done from the plan: Runs page grouped by workflow/node (CLAUDE.md 5.9), chat-generated workflow opening on the canvas (step 6).
 
 Known issues:
-- Migration `0006` (and the new workflow migrations) must be applied to the live Supabase project by the owner
-  (`apps/api/scripts/apply_migrations.py`, needs `SUPABASE_DB_URL`); the agent was blocked from running it.
+- Migrations 0001-0008 are applied to the live Supabase project. Apply a new one only when the owner asks:
+  `apps/api/scripts/apply_migrations.py` (reads `SUPABASE_DB_URL`, prints only file names; never print the URL).
+- Python is not on PATH in Bash: use `apps/api/.venv/Scripts/python.exe`. Bash heredocs with quotes fail on Windows: use the
+  Write tool or a `.cjs` script file. Full API suite takes ~4 min (run in background); web `npx vitest run` ~20 s.
+- `next build` writes the same `.next` as the running dev server: ask first, or run it with dev stopped.
+- Attach and Voice in the composer are disabled placeholders (no backend yet).
 - Windows: `uvicorn --reload` may leave an orphaned worker holding port 8000; restart by hand.
 - Retry in chat re-sends the last user message (adds a duplicate user bubble).
+
+- [x] Minimal UI migration (2026-11-12): pushed to `origin/main` (head `c4e94cf`); details in the UI section below.
+  Next likely: Step 6/7 above, a manual visual pass of every page in light and dark, reconnect Google for the new scopes.
 
 ## 7. How to run
 ```powershell
